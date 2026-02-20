@@ -107,20 +107,20 @@ export default function Tickets() {
 
   return (
     <div className="min-h-screen bg-[#efefef] text-[#333]">
-      <div className="mx-auto max-w-[390px] min-h-screen bg-[#efefef] flex flex-col">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1100px] flex-col bg-[#efefef]">
         <QuestMobileTopBar />
 
-        <section className="relative h-[190px] overflow-hidden">
+        <section className="relative h-[190px] overflow-hidden sm:h-[220px] md:h-[280px]">
           <img
             src="https://images.unsplash.com/photo-1635606453666-86ca73f681ec?auto=format&fit=crop&w=1200&q=80"
             alt="Theme park rides"
             className="h-full w-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-black/10" />
-          <h1 className="absolute bottom-8 left-6 text-4xl font-black text-white">Tickets</h1>
+          <h1 className="absolute bottom-8 left-6 text-4xl font-black text-white sm:text-5xl">Tickets</h1>
         </section>
 
-        <main className="flex-1 px-4 pb-8 pt-5">
+        <main className="flex-1 px-4 pb-8 pt-5 sm:px-6 md:px-8">
           <div className="flex items-center gap-1 text-xs text-[#9d9d9d]">
             <Menu className="h-3.5 w-3.5" />
             <ChevronRight className="h-3 w-3" />
@@ -132,17 +132,19 @@ export default function Tickets() {
             <ChevronRight className="h-3 w-3" />
           </div>
 
-          {selectedDate ? <SessionTimerStrip className="mt-4" /> : null}
+          {selectedDate ? <SessionTimerStrip className="mt-4 max-w-[560px]" /> : null}
 
-          <h2 className="mt-5 text-[2rem] font-black text-[hsl(var(--quest-purple))]">Admission Tickets</h2>
+          <h2 className="mt-5 text-[2rem] font-black text-[hsl(var(--quest-purple))] sm:text-[2.15rem]">
+            Admission Tickets
+          </h2>
 
-          <section className="mt-4 rounded-md bg-white p-3 shadow-sm">
+          <section className="mt-4 rounded-md bg-white p-3 shadow-sm md:p-4">
             <img
               src="https://images.unsplash.com/photo-1605540436563-5bca919ae766?auto=format&fit=crop&w=1200&q=80"
               alt="Admission ticket experience"
-              className="h-[145px] w-full rounded-sm object-cover"
+              className="h-[145px] w-full rounded-sm object-cover sm:h-[200px] md:h-[250px]"
             />
-            <h3 className="mt-3 text-center text-[2rem] font-black text-[hsl(var(--quest-purple))]">
+            <h3 className="mt-3 text-center text-[2rem] font-black text-[hsl(var(--quest-purple))] sm:text-[2.15rem]">
               Admission Tickets
             </h3>
 
@@ -246,13 +248,13 @@ export default function Tickets() {
           </section>
 
           {selectedDate ? (
-            <section className="mt-4 space-y-4">
+            <section className="mt-4 grid gap-4 md:grid-cols-2">
               {TICKET_PRODUCTS.map((product) => (
                 <article key={product.id} className="rounded-md border border-[#ececec] bg-white px-3 py-3">
                   <img
                     src={product.imageUrl}
                     alt={product.name}
-                    className="h-[120px] w-full rounded-sm object-cover"
+                    className="h-[120px] w-full rounded-sm object-cover sm:h-[160px]"
                   />
                   <h3 className="mt-3 text-center text-[1.45rem] font-black text-[hsl(var(--quest-purple))]">
                     {product.name}
@@ -310,7 +312,7 @@ export default function Tickets() {
               </div>
             </section>
           ) : (
-            <section id="cart" className="mt-4 overflow-hidden rounded-md border border-[#e2e2e2] bg-white">
+            <section id="cart" className="mt-4 overflow-hidden rounded-md border border-[#e2e2e2] bg-white md:mt-6">
               <div className="grid grid-cols-[1fr_auto_auto] gap-3 bg-[#f9be13] px-3 py-2 text-sm font-bold text-[#1b1b1b]">
                 <span>Item</span>
                 <span>Qty</span>
