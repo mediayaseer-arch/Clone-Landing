@@ -23,14 +23,14 @@ export interface TicketOrderItem {
 export const TICKET_PRODUCTS: TicketProduct[] = [
   {
     id: "adult",
-    name: "Online Admission - Adult",
+    name: "دخول إلكتروني - بالغ",
     unitPrice: 100,
     imageUrl:
       "https://images.unsplash.com/photo-1493857671505-72967e2e2760?auto=format&fit=crop&w=1200&q=80",
   },
   {
     id: "junior",
-    name: "Online Admission - Junior",
+    name: "دخول إلكتروني - طفل",
     unitPrice: 80,
     imageUrl:
       "https://images.unsplash.com/photo-1513889961551-628c1e5e2ee9?auto=format&fit=crop&w=1200&q=80",
@@ -128,5 +128,10 @@ export function getOrderSubtotal(items: TicketOrderItem[]): number {
 }
 
 export function formatQar(amount: number): string {
-  return `QAR ${amount.toFixed(2)}`;
+  const formattedAmount = new Intl.NumberFormat("ar-QA", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+
+  return `${formattedAmount} ر.ق`;
 }

@@ -39,7 +39,7 @@ export function Header() {
             className="border-[hsl(var(--quest-green))] text-[hsl(var(--quest-green))] hover:bg-[hsl(var(--quest-green))] hover:text-white font-bold tracking-wide transition-all duration-300 rounded-full px-6"
           >
             <ShoppingBag className="w-4 h-4 mr-2" />
-            SHOP NOW
+            تسوّق الآن
           </Button>
 
           <Button 
@@ -48,7 +48,7 @@ export function Header() {
           >
             <Link href="/tickets">
               <Ticket className="w-4 h-4 mr-2" />
-              BUY TICKETS
+              احجز التذاكر
             </Link>
           </Button>
           
