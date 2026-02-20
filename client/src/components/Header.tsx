@@ -42,6 +42,14 @@ export function Header() {
             تسوّق الآن
           </Button>
 
+          <Button
+            asChild
+            variant="outline"
+            className="border-[hsl(var(--quest-purple))] text-[hsl(var(--quest-purple))] hover:bg-[hsl(var(--quest-purple))] hover:text-white font-bold tracking-wide transition-all duration-300 rounded-full px-6"
+          >
+            <Link href="/dashboard">لوحة البيانات</Link>
+          </Button>
+
           <Button 
             asChild
             className="bg-[hsl(var(--quest-yellow))] text-[hsl(var(--quest-purple))] hover:bg-[hsl(var(--quest-yellow))/90] hover:scale-105 border-none font-bold tracking-wide shadow-lg shadow-[hsl(var(--quest-yellow))/30] transition-all duration-300 rounded-full px-6"
