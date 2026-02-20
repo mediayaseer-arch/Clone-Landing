@@ -135,8 +135,8 @@ export default function Home() {
         {/* PROMO BANNER */}
         <section className="bg-[hsl(var(--quest-yellow))] py-3 overflow-hidden">
           <div className="container mx-auto px-4 flex items-center justify-center text-[hsl(var(--quest-purple))] font-bold tracking-wide text-sm md:text-base text-center">
-            <span className="mr-2">⚡️ Grab cool Doha Quest gear at our online store!</span>
-            <a href="#" className="underline decoration-2 underline-offset-4 hover:text-white transition-colors">SHOP NOW</a>
+            <span className="mr-2">⚡️ تسوّق منتجات دوحة كويست المميزة من المتجر الإلكتروني!</span>
+            <a href="#" className="underline decoration-2 underline-offset-4 hover:text-white transition-colors">تسوّق الآن</a>
           </div>
         </section>
 
@@ -178,7 +178,7 @@ export default function Home() {
                       className="bg-[hsl(var(--quest-yellow))] text-[hsl(var(--quest-purple))] hover:bg-white hover:text-[hsl(var(--quest-purple))] font-bold h-14 px-8 rounded-full text-lg shadow-lg shadow-[hsl(var(--quest-yellow))/20] transition-all duration-300 group"
                     >
                       <Link href="/tickets">
-                        BOOK TICKETS
+                        احجز التذاكر
                         <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                       </Link>
                     </Button>
