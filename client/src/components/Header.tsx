@@ -43,15 +43,18 @@ export function Header() {
           </Button>
 
           <Button 
-            className="bg-[hsl(var(--quest-yellow))] text-[hsl(var(--quest-purple))] hover:bg-[hsl(var(--quest-yellow))/90 hover:scale-105 border-none font-bold tracking-wide shadow-lg shadow-[hsl(var(--quest-yellow))/30] transition-all duration-300 rounded-full px-6"
+            asChild
+            className="bg-[hsl(var(--quest-yellow))] text-[hsl(var(--quest-purple))] hover:bg-[hsl(var(--quest-yellow))/90] hover:scale-105 border-none font-bold tracking-wide shadow-lg shadow-[hsl(var(--quest-yellow))/30] transition-all duration-300 rounded-full px-6"
           >
-            <Ticket className="w-4 h-4 mr-2" />
-            BUY TICKETS
+            <Link href="/tickets">
+              <Ticket className="w-4 h-4 mr-2" />
+              BUY TICKETS
+            </Link>
           </Button>
           
           <Button 
             size="icon"
-            className="bg-[hsl(var(--quest-purple))] text-white hover:bg-[hsl(var(--quest-purple))/90 ml-2 rounded-full w-10 h-10"
+            className="bg-[hsl(var(--quest-purple))] text-white hover:bg-[hsl(var(--quest-purple))/90] ml-2 rounded-full w-10 h-10"
           >
             <Menu className="w-5 h-5" />
           </Button>

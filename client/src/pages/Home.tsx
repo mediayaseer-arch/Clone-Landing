@@ -1,8 +1,9 @@
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { Clock, Ticket, ArrowRight, Star } from "lucide-react";
+import { Clock, ArrowRight, Star } from "lucide-react";
 import { motion } from "framer-motion";
+import { Link } from "wouter";
 
 export default function Home() {
   return (
@@ -172,10 +173,15 @@ export default function Home() {
                    </p>
                    
                    <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mb-10">
-                     <Button className="bg-[hsl(var(--quest-yellow))] text-[hsl(var(--quest-purple))] hover:bg-white hover:text-[hsl(var(--quest-purple))] font-bold h-14 px-8 rounded-full text-lg shadow-lg shadow-[hsl(var(--quest-yellow))/20] transition-all duration-300 group">
-                       BOOK TICKETS
-                       <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                     </Button>
+                    <Button
+                      asChild
+                      className="bg-[hsl(var(--quest-yellow))] text-[hsl(var(--quest-purple))] hover:bg-white hover:text-[hsl(var(--quest-purple))] font-bold h-14 px-8 rounded-full text-lg shadow-lg shadow-[hsl(var(--quest-yellow))/20] transition-all duration-300 group"
+                    >
+                      <Link href="/tickets">
+                        BOOK TICKETS
+                        <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                      </Link>
+                    </Button>
                      
                      <div className="flex items-center gap-2 bg-white/10 px-4 py-2 rounded-lg backdrop-blur-sm border border-white/5">
                        <div className="flex gap-0.5">
