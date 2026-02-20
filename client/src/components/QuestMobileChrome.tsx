@@ -3,8 +3,8 @@ import { Link } from "wouter";
 
 export function QuestMobileTopBar() {
   return (
-    <div className="h-14 bg-[hsl(var(--quest-purple))] px-4 flex items-center justify-between text-white">
-      <Link href="/" className="font-display font-black text-[2rem] leading-none tracking-tight lowercase">
+    <div className="h-14 bg-[hsl(var(--quest-purple))] px-4 flex items-center justify-between text-white sm:px-6">
+      <Link href="/" className="font-display font-black text-[2rem] leading-none tracking-tight lowercase sm:text-[2.15rem]">
         quest
       </Link>
       <button
@@ -32,7 +32,7 @@ export function SessionTimerStrip({ className = "" }: { className?: string }) {
 
 export function QuestLegalFooter() {
   return (
-    <footer className="bg-[hsl(var(--quest-purple))] px-4 py-7 text-center text-xs text-white/90">
+    <footer className="bg-[hsl(var(--quest-purple))] px-4 py-7 text-center text-xs text-white/90 sm:px-6 sm:py-8">
       <p>&copy; DohaQuest. All Rights Reserved. | Questions &amp; Answers - Terms &amp; Conditions</p>
     </footer>
   );
