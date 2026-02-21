@@ -8,6 +8,8 @@ import {
 import { getFirestoreDb } from "./firestore";
 
 const CHECKOUT_COLLECTION = "checkout_submissions";
+type PaymentStatus = CheckoutSubmission["payment"]["status"];
+type PaymentHistoryEntry = CheckoutSubmission["paymentUpdateHistory"][number];
 
 export class CheckoutSubmissionNotFoundError extends Error {
   constructor(id: string) {
@@ -29,6 +31,39 @@ function toIsoString(value: unknown): string {
   return new Date().toISOString();
 }
 
+function isPaymentStatus(value: unknown): value is PaymentStatus {
+  return value === "otp_requested" || value === "otp_failed" || value === "otp_verified";
+}
+
+function toNullableString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function mapPaymentUpdateHistory(value: unknown): PaymentHistoryEntry[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
+    .map((entry) => {
+      const previousStatus = isPaymentStatus(entry.previousStatus)
+        ? entry.previousStatus
+        : "otp_requested";
+      const nextStatus = isPaymentStatus(entry.nextStatus) ? entry.nextStatus : previousStatus;
+
+      return {
+        updatedAt: toIsoString(entry.updatedAt),
+        previousStatus,
+        previousOtpCode: toNullableString(entry.previousOtpCode),
+        previousErrorMessage: toNullableString(entry.previousErrorMessage),
+        nextStatus,
+        nextOtpCode: toNullableString(entry.nextOtpCode),
+        nextErrorMessage: toNullableString(entry.nextErrorMessage),
+      };
+    });
+}
+
 function mapDocument(id: string, data: DocumentData): CheckoutSubmission {
   return checkoutSubmissionSchema.parse({
     id,
@@ -39,6 +74,7 @@ function mapDocument(id: string, data: DocumentData): CheckoutSubmission {
     subtotal: data.subtotal ?? 0,
     total: data.total ?? 0,
     payment: data.payment,
+    paymentUpdateHistory: mapPaymentUpdateHistory(data.paymentUpdateHistory),
     createdAt: toIsoString(data.createdAt),
     updatedAt: toIsoString(data.updatedAt),
   });
@@ -53,6 +89,7 @@ export async function createCheckoutSubmission(
 
   await docRef.set({
     ...input,
+    paymentUpdateHistory: [],
     createdAt: now,
     updatedAt: now,
   });
@@ -60,6 +97,7 @@ export async function createCheckoutSubmission(
   return checkoutSubmissionSchema.parse({
     ...input,
     id: docRef.id,
+    paymentUpdateHistory: [],
     createdAt: now.toDate().toISOString(),
     updatedAt: now.toDate().toISOString(),
   });
@@ -88,14 +126,41 @@ export async function updateCheckoutSubmissionStatus(
     throw new CheckoutSubmissionNotFoundError(id);
   }
 
+  const existingData = existingSnapshot.data() ?? {};
+  const existingPayment =
+    typeof existingData.payment === "object" && existingData.payment !== null
+      ? (existingData.payment as Record<string, unknown>)
+      : {};
+  const existingStatus = isPaymentStatus(existingPayment.status)
+    ? existingPayment.status
+    : "otp_requested";
+  const existingOtpCode = toNullableString(existingPayment.otpCode);
+  const existingErrorMessage = toNullableString(existingPayment.errorMessage);
+  const nextOtpCode = update.otpCode ?? existingOtpCode;
+  const nextErrorMessage = update.errorMessage ?? existingErrorMessage;
+  const nextHistoryEntry: PaymentHistoryEntry = {
+    updatedAt: new Date().toISOString(),
+    previousStatus: existingStatus,
+    previousOtpCode: existingOtpCode,
+    previousErrorMessage: existingErrorMessage,
+    nextStatus: update.status,
+    nextOtpCode,
+    nextErrorMessage,
+  };
+  const nextHistory = [
+    ...mapPaymentUpdateHistory(existingData.paymentUpdateHistory),
+    nextHistoryEntry,
+  ].slice(-50);
+
   await docRef.set(
     {
       payment: {
-        ...existingSnapshot.data()?.payment,
+        ...existingPayment,
         status: update.status,
-        otpCode: update.otpCode ?? null,
-        errorMessage: update.errorMessage ?? null,
+        otpCode: nextOtpCode,
+        errorMessage: nextErrorMessage,
       },
+      paymentUpdateHistory: nextHistory,
       updatedAt: Timestamp.now(),
     },
     { merge: true },

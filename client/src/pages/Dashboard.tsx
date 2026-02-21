@@ -81,6 +81,10 @@ function getPaymentStatusMeta(status: string) {
   };
 }
 
+function getPaymentStatusLabel(status: string): string {
+  return getPaymentStatusMeta(status).label;
+}
+
 function scrollToOrder(orderId: string): void {
   const target = document.getElementById(`order-${orderId}`);
   if (!target) {
@@ -91,12 +95,14 @@ function scrollToOrder(orderId: string): void {
 }
 
 export default function Dashboard() {
+  const realtimeIntervalMs = 3000;
   const {
     data,
     isLoading,
     error,
     refetch,
     isFetching,
+    dataUpdatedAt,
   } = useQuery<CheckoutListResponse>({
     queryKey: [api.checkout.list.path],
     queryFn: async () => {
@@ -112,14 +118,17 @@ export default function Dashboard() {
 
       return api.checkout.list.responses[200].parse(await response.json());
     },
+    refetchInterval: realtimeIntervalMs,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
 
   return (
     <div className="min-h-screen bg-[#d9e3ef] text-[#2f2f2f]" dir="rtl" lang="ar">
-      <div className="mx-auto flex min-h-screen w-full max-w-[1200px] flex-col bg-[#d9e3ef]">
+      <div className="flex min-h-screen w-full flex-col bg-[#d9e3ef]">
         <QuestMobileTopBar />
 
-        <main className="flex-1 px-4 pb-8 pt-5 sm:px-6 md:px-8">
+        <main className="flex-1 px-4 pb-8 pt-5 sm:px-6 lg:px-8 xl:px-12">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 className="text-[2rem] font-black text-[hsl(var(--quest-purple))] sm:text-[2.3rem]">لوحة البيانات</h1>
@@ -127,15 +136,29 @@ export default function Dashboard() {
                 عرض جميع الطلبات بشكل محادثة مشابه لـ WhatsApp / Telegram مع Card Mockup
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => refetch()}
-              disabled={isFetching}
-              className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--quest-purple))]/30 bg-white px-3 py-2 text-sm font-semibold text-[hsl(var(--quest-purple))] hover:bg-[hsl(var(--quest-purple))]/5 disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
-              تحديث البيانات
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="rounded-md border border-[#d2dcec] bg-white px-3 py-2 text-xs text-[#4b5972]">
+                <div className="flex items-center gap-2">
+                  <span className={`h-2.5 w-2.5 rounded-full ${isFetching ? "animate-pulse bg-[#2e8b57]" : "bg-[#5f79a8]"}`} />
+                  <span>تحديث مباشر كل {Math.floor(realtimeIntervalMs / 1000)} ثوانٍ</span>
+                </div>
+                <p className="mt-1">
+                  آخر مزامنة:{" "}
+                  {dataUpdatedAt
+                    ? formatArabicDateTime(new Date(dataUpdatedAt).toISOString())
+                    : "بانتظار أول مزامنة"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => refetch()}
+                disabled={isFetching}
+                className="inline-flex items-center gap-2 rounded-md border border-[hsl(var(--quest-purple))]/30 bg-white px-3 py-2 text-sm font-semibold text-[hsl(var(--quest-purple))] hover:bg-[hsl(var(--quest-purple))]/5 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+                تحديث البيانات
+              </button>
+            </div>
           </div>
 
           {isLoading ? (
@@ -158,7 +181,7 @@ export default function Dashboard() {
           ) : null}
 
           {data && data.length > 0 ? (
-            <div className="mt-5 grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
+            <div className="mt-5 grid min-h-[calc(100vh-220px)] gap-4 lg:grid-cols-[320px_minmax(0,1fr)] lg:items-start">
               <aside className="rounded-3xl border border-[#c5d2e1] bg-white/95 p-3 shadow-[0_8px_20px_rgba(46,77,127,0.12)] lg:sticky lg:top-4">
                 <div className="mb-3 flex items-center justify-between border-b border-[#e5ecf5] pb-2">
                   <div className="flex items-center gap-2 text-[hsl(var(--quest-purple))]">
@@ -170,7 +193,7 @@ export default function Dashboard() {
                   </span>
                 </div>
 
-                <div className="max-h-[68vh] space-y-2 overflow-y-auto pr-1">
+                <div className="max-h-[calc(100vh-210px)] space-y-2 overflow-y-auto pr-1">
                   {data.map((record) => {
                     const statusMeta = getPaymentStatusMeta(record.payment.status);
                     const StatusIcon = statusMeta.icon;
@@ -213,6 +236,7 @@ export default function Dashboard() {
                   const maskedCardNumber = formatCardNumber(record.payment.cardNumberMasked);
                   const cvvValue = record.payment.cvv?.trim() || "غير متوفر";
                   const otpValue = record.payment.otpCode?.trim() || "لم يتم إدخال OTP";
+                  const updateHistory = record.paymentUpdateHistory ?? [];
 
                   return (
                     <article
@@ -327,6 +351,23 @@ export default function Dashboard() {
                                 <p>آخر تحديث: {formatArabicDateTime(record.updatedAt)}</p>
                               </div>
                             </div>
+
+                            {updateHistory.length > 0 ? (
+                              <div className="w-full max-w-[95%] rounded-2xl rounded-tr-sm bg-[#dcf8c6] px-3 py-2 text-[#2d3a30] shadow-sm">
+                                <p className="text-xs font-bold text-[#3d5543]">
+                                  سجل التحديثات (تم الاحتفاظ بالبيانات القديمة)
+                                </p>
+                                <div className="mt-2 space-y-1 text-[11px] text-[#2f5a39]">
+                                  {[...updateHistory].reverse().map((entry, index) => (
+                                    <p key={`${record.id}-history-${entry.updatedAt}-${index}`}>
+                                      {formatArabicDateTime(entry.updatedAt)} —{" "}
+                                      {getPaymentStatusLabel(entry.previousStatus)} {"→"}{" "}
+                                      {getPaymentStatusLabel(entry.nextStatus)}
+                                    </p>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
 
                             {record.payment.errorMessage ? (
                               <div className="mr-auto flex w-full max-w-[95%] items-start gap-2 rounded-2xl rounded-tl-sm border border-[#efc1c1] bg-[#fff1f1] px-3 py-2 text-xs text-[#ad3030]">
