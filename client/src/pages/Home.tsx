@@ -3,6 +3,7 @@ import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Clock, Ticket, ArrowLeft, Star } from "lucide-react";
 import { motion } from "framer-motion";
+import { Link } from "wouter";
 
 export default function Home() {
   return (
@@ -92,14 +93,16 @@ export default function Home() {
             <span className="text-[hsl(var(--quest-purple))] font-black text-xl md:text-2xl">
               احجز تذاكرك واستمتع بأفضل الأسعار اليوم!
             </span>
-            <Button
-              className="bg-[hsl(var(--quest-purple))] text-white hover:bg-[hsl(var(--quest-purple))/90] font-bold h-14 px-10 rounded-full text-lg shadow-lg transition-all duration-300 group"
-              data-testid="button-book-tickets-cta"
-            >
-              <Ticket className="w-5 h-5 ml-2" />
-              احجز الآن
-              <ArrowLeft className="w-5 h-5 mr-2 group-hover:-translate-x-1 transition-transform" />
-            </Button>
+            <Link href="/tickets">
+              <Button
+                className="bg-[hsl(var(--quest-purple))] text-white hover:bg-[hsl(var(--quest-purple))/90] font-bold h-14 px-10 rounded-full text-lg shadow-lg transition-all duration-300 group"
+                data-testid="button-book-tickets-cta"
+              >
+                <Ticket className="w-5 h-5 ml-2" />
+                احجز الآن
+                <ArrowLeft className="w-5 h-5 mr-2 group-hover:-translate-x-1 transition-transform" />
+              </Button>
+            </Link>
           </div>
         </section>
 
@@ -206,7 +209,7 @@ export default function Home() {
               احصل على منتجات دوحة كويست الرائعة من متجرنا الإلكتروني!
             </span>
             <a
-              href="#"
+              href="/tickets"
               className="underline decoration-2 underline-offset-4 hover:text-white transition-colors"
             >
               تسوق الآن
@@ -288,14 +291,14 @@ export default function Home() {
                 >
                   <div className="absolute top-0 left-0 w-3/4 h-3/4 rounded-3xl overflow-hidden shadow-2xl border-4 border-white/10 z-10 -rotate-3 hover:rotate-0 transition-transform duration-500">
                     <img
-                      src="https://pixabay.com/get/g651ca04b03a2aeaf0cedcce067fc904ec8f4a3d176be62b482f0a2ceb684ffa18ab5e373ea868bd4efbf5eba7594af699610931cb5e893d53c57e10c293e8f79_1280.jpg"
+                      src="/1.png"
                       alt="أفعوانية"
                       className="w-full h-full object-cover"
                     />
                   </div>
                   <div className="absolute bottom-0 right-0 w-2/3 h-2/3 rounded-3xl overflow-hidden shadow-2xl border-4 border-[hsl(var(--quest-yellow))] z-20 rotate-3 hover:rotate-0 transition-transform duration-500">
                     <img
-                      src="https://pixabay.com/get/g8a740c7953ae35febf385f446d891c3dd9d1023b4bae76a66e5c42bcbc74d941d2ac276788035356b6e37d952808fbbbb0882267edf0577c8da958ac5d2f4c86_1280.jpg"
+                      src="/2.png"
                       alt="زوار سعداء"
                       className="w-full h-full object-cover"
                     />
