@@ -32,10 +32,11 @@ function getAllowedTurnstileHostnames(): string[] {
 }
 
 function getApiClientAddress(req: Request): string {
+  const fallbackIp = req.ip ?? "";
   if (Array.isArray(req.ips) && req.ips.length > 0) {
-    return req.ips[0] ?? req.ip;
+    return req.ips[0] ?? fallbackIp;
   }
-  return req.ip;
+  return fallbackIp;
 }
 
 async function verifyTurnstileToken(
