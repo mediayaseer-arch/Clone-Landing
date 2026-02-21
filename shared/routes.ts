@@ -46,6 +46,10 @@ export const api = {
         200: z.array(checkoutSubmissionSchema),
       },
     },
+    stream: {
+      method: 'GET' as const,
+      path: '/api/checkout/submissions/stream' as const,
+    },
     updateStatus: {
       method: 'PATCH' as const,
       path: '/api/checkout/submissions/:id/status' as const,
