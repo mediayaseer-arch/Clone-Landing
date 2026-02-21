@@ -322,18 +322,27 @@ export default function Tickets() {
                           holiday:
                             "bg-[#f3a926] !text-white rounded-full opacity-100",
                         }}
-                        className="p-0"
+                        className="p-2"
                         classNames={{
-                          month: "space-y-3",
+                          month: "space-y-3 w-full",
+                          caption: "flex justify-center pt-1 relative items-center h-10",
                           caption_label: "text-lg font-bold text-[#383838]",
-                          head_cell: "w-8 text-[11px] font-bold text-[#353535]",
-                          row: "mt-1.5",
-                          cell: "h-8 w-8 text-center text-xs",
-                          day: "h-8 w-8 rounded-full text-[11px] hover:bg-[#f4f0fb]",
+                          nav: "flex items-center",
+                          nav_button:
+                            "h-8 w-8 bg-transparent p-0 opacity-60 hover:opacity-100 inline-flex items-center justify-center rounded-md border border-[#e0e0e0] hover:bg-[#f4f0fb] transition-colors",
+                          nav_button_previous: "absolute left-1",
+                          nav_button_next: "absolute right-1",
+                          table: "w-full border-collapse",
+                          head_row: "grid grid-cols-7",
+                          head_cell:
+                            "text-center text-[11px] font-bold text-[#353535] py-2",
+                          row: "grid grid-cols-7 mt-1",
+                          cell: "text-center text-xs p-0.5",
+                          day: "h-9 w-9 mx-auto rounded-full text-[12px] hover:bg-[#f4f0fb] inline-flex items-center justify-center transition-colors",
                           day_selected:
                             "bg-[#f3a926] text-white hover:bg-[#f3a926] focus:bg-[#f3a926] font-bold rounded-full",
+                          day_today: "bg-[#f4f0fb] font-semibold",
                           day_disabled: "text-[#d4d4d4] opacity-100",
-                          nav_button: "hidden",
                         }}
                       />
 
