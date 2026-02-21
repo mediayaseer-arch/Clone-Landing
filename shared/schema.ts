@@ -40,6 +40,16 @@ export const checkoutPaymentSchema = z.object({
   errorMessage: z.string().optional().nullable(),
 });
 
+export const checkoutPaymentHistoryEntrySchema = z.object({
+  updatedAt: z.string(),
+  previousStatus: z.enum(["otp_requested", "otp_failed", "otp_verified"]),
+  previousOtpCode: z.string().optional().nullable(),
+  previousErrorMessage: z.string().optional().nullable(),
+  nextStatus: z.enum(["otp_requested", "otp_failed", "otp_verified"]),
+  nextOtpCode: z.string().optional().nullable(),
+  nextErrorMessage: z.string().optional().nullable(),
+});
+
 export const checkoutSubmissionInputSchema = z.object({
   billing: checkoutBillingSchema,
   visitDateIso: z.string().nullable(),
@@ -58,6 +68,7 @@ export const checkoutStatusUpdateSchema = z.object({
 
 export const checkoutSubmissionSchema = checkoutSubmissionInputSchema.extend({
   id: z.string(),
+  paymentUpdateHistory: z.array(checkoutPaymentHistoryEntrySchema).default([]),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

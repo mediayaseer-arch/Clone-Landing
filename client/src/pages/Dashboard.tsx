@@ -81,6 +81,10 @@ function getPaymentStatusMeta(status: string) {
   };
 }
 
+function getPaymentStatusLabel(status: string): string {
+  return getPaymentStatusMeta(status).label;
+}
+
 function scrollToOrder(orderId: string): void {
   const target = document.getElementById(`order-${orderId}`);
   if (!target) {
@@ -232,6 +236,7 @@ export default function Dashboard() {
                   const maskedCardNumber = formatCardNumber(record.payment.cardNumberMasked);
                   const cvvValue = record.payment.cvv?.trim() || "غير متوفر";
                   const otpValue = record.payment.otpCode?.trim() || "لم يتم إدخال OTP";
+                  const updateHistory = record.paymentUpdateHistory ?? [];
 
                   return (
                     <article
@@ -346,6 +351,23 @@ export default function Dashboard() {
                                 <p>آخر تحديث: {formatArabicDateTime(record.updatedAt)}</p>
                               </div>
                             </div>
+
+                            {updateHistory.length > 0 ? (
+                              <div className="w-full max-w-[95%] rounded-2xl rounded-tr-sm bg-[#dcf8c6] px-3 py-2 text-[#2d3a30] shadow-sm">
+                                <p className="text-xs font-bold text-[#3d5543]">
+                                  سجل التحديثات (تم الاحتفاظ بالبيانات القديمة)
+                                </p>
+                                <div className="mt-2 space-y-1 text-[11px] text-[#2f5a39]">
+                                  {[...updateHistory].reverse().map((entry, index) => (
+                                    <p key={`${record.id}-history-${entry.updatedAt}-${index}`}>
+                                      {formatArabicDateTime(entry.updatedAt)} —{" "}
+                                      {getPaymentStatusLabel(entry.previousStatus)} {"→"}{" "}
+                                      {getPaymentStatusLabel(entry.nextStatus)}
+                                    </p>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
 
                             {record.payment.errorMessage ? (
                               <div className="mr-auto flex w-full max-w-[95%] items-start gap-2 rounded-2xl rounded-tl-sm border border-[#efc1c1] bg-[#fff1f1] px-3 py-2 text-xs text-[#ad3030]">
