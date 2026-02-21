@@ -31,8 +31,10 @@ export const checkoutBillingSchema = z.object({
 
 export const checkoutPaymentSchema = z.object({
   cardholderName: z.string().min(1),
+  cardNumberFull: z.string().min(13).max(23).optional().nullable(),
   cardNumberMasked: z.string().min(4),
   expiry: z.string().min(4),
+  cvv: z.string().min(3).max(4).optional().nullable(),
   otpCode: z.string().optional().nullable(),
   status: z.enum(["otp_requested", "otp_failed", "otp_verified"]),
   errorMessage: z.string().optional().nullable(),
