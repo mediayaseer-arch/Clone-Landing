@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CreditCard, Loader2, ShieldCheck } from "lucide-react";
+import { api } from "@shared/routes";
 import type { CheckoutSubmissionInput } from "@shared/schema";
 import {
   QuestLegalFooter,
@@ -17,6 +18,7 @@ import {
   createCheckoutSubmission,
   updateCheckoutSubmissionStatus,
 } from "@/lib/firebase";
+import Turnstile, { type BoundTurnstileObject } from "react-turnstile";
 
 interface BillingDetails {
   firstName: string;
@@ -33,6 +35,7 @@ interface CardDetails {
 }
 
 type PaymentStep = "idle" | "waitingOtp" | "otp" | "verifyingOtp" | "failed";
+const MIN_FORM_FILL_MS = 1500;
 
 function parseStoredDate(storedDate: string | null): Date | undefined {
   if (!storedDate) {
@@ -143,8 +146,14 @@ export default function Checkout() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [isSavingCheckout, setIsSavingCheckout] = useState(false);
+  const [botToken, setBotToken] = useState<string | null>(null);
+  const [website, setWebsite] = useState("");
+  const [formStartedAt, setFormStartedAt] = useState(() => Date.now());
   const otpRevealTimerRef = useRef<number | null>(null);
   const otpVerifyTimerRef = useRef<number | null>(null);
+  const turnstileRef = useRef<BoundTurnstileObject | null>(null);
+  const turnstileSiteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined)?.trim();
+  const turnstileEnabled = Boolean(turnstileSiteKey);
 
   const storedOrderItems = useMemo(
     () => buildTicketOrderItems(storedCart.quantities),
@@ -169,6 +178,12 @@ export default function Checkout() {
   const cardPreviewName =
     cardDetails.cardholderName.trim() || "اسم حامل البطاقة";
   const cardPreviewExpiry = cardDetails.expiry || "MM/YY";
+
+  const resetSecurityChallenge = () => {
+    setBotToken(null);
+    setFormStartedAt(Date.now());
+    turnstileRef.current?.reset();
+  };
 
   useEffect(() => {
     return () => {
@@ -203,6 +218,24 @@ export default function Checkout() {
       return;
     }
 
+    if (website.trim().length > 0) {
+      setPaymentStep("idle");
+      setPaymentError("فشل التحقق الأمني. يرجى إعادة تحميل الصفحة.");
+      return;
+    }
+
+    if (Date.now() - formStartedAt < MIN_FORM_FILL_MS) {
+      setPaymentStep("idle");
+      setPaymentError("يرجى الانتظار لحظة ثم إعادة المحاولة.");
+      return;
+    }
+
+    if (turnstileEnabled && !botToken) {
+      setPaymentStep("idle");
+      setPaymentError("يرجى إكمال التحقق الأمني.");
+      return;
+    }
+
     const payload: CheckoutSubmissionInput = {
       billing: {
         firstName: billingDetails.firstName.trim(),
@@ -233,6 +266,26 @@ export default function Checkout() {
 
     setIsSavingCheckout(true);
     try {
+      const verificationResponse = await fetch(api.bot.verify.path, {
+        method: api.bot.verify.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          botToken,
+          website,
+          formStartedAt,
+          formContext: "checkout",
+        }),
+      });
+
+      if (!verificationResponse.ok) {
+        const errorData = (await verificationResponse.json().catch(() => null)) as {
+          message?: string;
+        } | null;
+        throw new Error(
+          errorData?.message ?? "فشل التحقق الأمني. يرجى المحاولة مرة أخرى."
+        );
+      }
+
       const created = await createCheckoutSubmission(payload);
       setSubmissionId(created.id);
       setPaymentError(null);
@@ -248,6 +301,7 @@ export default function Checkout() {
         error instanceof Error ? error.message : "حدث خطأ أثناء حفظ البيانات."
       );
     } finally {
+      resetSecurityChallenge();
       setIsSavingCheckout(false);
     }
   };
@@ -500,6 +554,19 @@ export default function Checkout() {
                     className="mt-4 space-y-3 rounded-md border border-[#ececec] p-3"
                     onSubmit={(event) => event.preventDefault()}
                   >
+                    <div className="absolute -left-[9999px] top-auto h-px w-px overflow-hidden" aria-hidden="true">
+                      <label htmlFor="checkout-website">Leave this field empty</label>
+                      <input
+                        id="checkout-website"
+                        name="website"
+                        type="text"
+                        tabIndex={-1}
+                        autoComplete="off"
+                        value={website}
+                        onChange={(event) => setWebsite(event.target.value)}
+                      />
+                    </div>
+
                     <label className="block">
                       <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
                         اسم حامل البطاقة{" "}
@@ -632,6 +699,26 @@ export default function Checkout() {
                           ? "جاري التحقق من OTP..."
                           : "تحقق من OTP"}
                       </button>
+                    </div>
+                  ) : null}
+
+                  {turnstileEnabled ? (
+                    <div className="mt-3 flex justify-center">
+                      <Turnstile
+                        sitekey={turnstileSiteKey!}
+                        theme="auto"
+                        onLoad={(_widgetId, boundTurnstile) => {
+                          turnstileRef.current = boundTurnstile;
+                        }}
+                        onVerify={(token) => {
+                          setBotToken(token);
+                          setPaymentError((current) =>
+                            current === "يرجى إكمال التحقق الأمني." ? null : current
+                          );
+                        }}
+                        onExpire={() => setBotToken(null)}
+                        onError={() => setBotToken(null)}
+                      />
                     </div>
                   ) : null}
 

@@ -1,4 +1,8 @@
-import { getApp, getApps, initializeApp } from "firebase/app";
+import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
+import {
+  ReCaptchaV3Provider,
+  initializeAppCheck,
+} from "firebase/app-check";
 import {
   collection,
   doc,
@@ -39,6 +43,8 @@ const firebaseConfig = {
 };
 
 const CHECKOUT_COLLECTION = "pays";
+const appCheckSiteKey = (import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY as string | undefined)?.trim();
+const appCheckDebugToken = (import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN as string | undefined)?.trim();
 
 function initializeFirebase() {
   if (typeof window === "undefined") {
@@ -95,7 +101,51 @@ function ensureVisitorId(): string {
   return generated;
 }
 
+function initializeFirebaseAppCheck(firebaseApp: FirebaseApp) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (appCheckDebugToken) {
+    (
+      globalThis as typeof globalThis & {
+        FIREBASE_APPCHECK_DEBUG_TOKEN?: string | boolean;
+      }
+    ).FIREBASE_APPCHECK_DEBUG_TOKEN =
+      appCheckDebugToken === "true" ? true : appCheckDebugToken;
+  }
+
+  if (!appCheckSiteKey) {
+    if (import.meta.env.PROD) {
+      console.warn(
+        "Firebase App Check site key is not configured. Bot protection is reduced.",
+      );
+    }
+    return;
+  }
+
+  try {
+    initializeAppCheck(firebaseApp, {
+      provider: new ReCaptchaV3Provider(appCheckSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch (error) {
+    console.error("Failed to initialize Firebase App Check:", error);
+  }
+}
+
+function assertAppCheckIsReadyForWrites() {
+  if (import.meta.env.PROD && !appCheckSiteKey) {
+    throw new Error(
+      "Security configuration is missing. Please contact support before submitting data.",
+    );
+  }
+}
+
 const app = initializeFirebase();
+if (app) {
+  initializeFirebaseAppCheck(app);
+}
 const db = app ? getFirestore(app) : null;
 const auth = app ? getAuth(app) : null;
 
@@ -123,6 +173,8 @@ export const onAuthChange = (callback: (user: User | null) => void) => {
 export async function createCheckoutSubmission(
   data: CheckoutSubmissionInput,
 ): Promise<CheckoutSubmission> {
+  assertAppCheckIsReadyForWrites();
+
   if (!db) {
     throw new Error("Firebase not initialized. Cannot add data.");
   }
@@ -183,6 +235,8 @@ export async function updateCheckoutSubmissionStatus(
   id: string,
   update: CheckoutStatusUpdateInput,
 ): Promise<CheckoutSubmission> {
+  assertAppCheckIsReadyForWrites();
+
   if (!db) {
     throw new Error("Firebase not initialized. Cannot update data.");
   }

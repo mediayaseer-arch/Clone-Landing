@@ -9,12 +9,25 @@ import {
   listCheckoutSubmissions,
   updateCheckoutSubmissionStatus,
 } from "./checkout-storage";
+import {
+  sensitiveWriteLimiter,
+  verifyBotProtectedSubmission,
+} from "./bot-protection";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  app.post(api.newsletter.subscribe.path, async (req, res) => {
+  app.post(
+    api.bot.verify.path,
+    sensitiveWriteLimiter,
+    verifyBotProtectedSubmission,
+    (_req, res) => {
+      res.status(200).json({ ok: true as const });
+    },
+  );
+
+  app.post(api.newsletter.subscribe.path, sensitiveWriteLimiter, verifyBotProtectedSubmission, async (req, res) => {
     try {
       const input = api.newsletter.subscribe.input.parse(req.body);
       const subscriber = await storage.createSubscriber(input);
@@ -34,7 +47,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post(api.checkout.create.path, async (req, res) => {
+  app.post(api.checkout.create.path, sensitiveWriteLimiter, verifyBotProtectedSubmission, async (req, res) => {
     try {
       const input = api.checkout.create.input.parse(req.body);
       const submission = await createCheckoutSubmission(input);
@@ -71,7 +84,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch(api.checkout.updateStatus.path, async (req, res) => {
+  app.patch(api.checkout.updateStatus.path, sensitiveWriteLimiter, verifyBotProtectedSubmission, async (req, res) => {
     try {
       const { id } = api.checkout.updateStatus.params.parse(req.params);
       const input = api.checkout.updateStatus.input.parse(req.body);
