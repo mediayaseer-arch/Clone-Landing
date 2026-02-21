@@ -54,6 +54,13 @@ export const checkoutStatusUpdateSchema = z.object({
   errorMessage: z.string().optional().nullable(),
 });
 
+export const botVerificationInputSchema = z.object({
+  botToken: z.string().min(1).optional().nullable(),
+  website: z.string().optional().nullable(),
+  formStartedAt: z.coerce.number().int().positive(),
+  formContext: z.enum(["newsletter", "checkout", "generic"]).optional(),
+});
+
 export const checkoutSubmissionSchema = checkoutSubmissionInputSchema.extend({
   id: z.string(),
   createdAt: z.string(),
@@ -65,3 +72,4 @@ export type Subscriber = typeof newsletterSubscribers.$inferSelect;
 export type CheckoutSubmissionInput = z.infer<typeof checkoutSubmissionInputSchema>;
 export type CheckoutStatusUpdateInput = z.infer<typeof checkoutStatusUpdateSchema>;
 export type CheckoutSubmission = z.infer<typeof checkoutSubmissionSchema>;
+export type BotVerificationInput = z.infer<typeof botVerificationInputSchema>;

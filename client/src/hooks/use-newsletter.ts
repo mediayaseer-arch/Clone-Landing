@@ -1,12 +1,19 @@
 import { useMutation } from "@tanstack/react-query";
-import { api, type SubscribeInput, type SubscribeResponse } from "@shared/routes";
+import {
+  api,
+  type BotVerifyInput,
+  type SubscribeInput,
+  type SubscribeResponse,
+} from "@shared/routes";
 import { useToast } from "@/hooks/use-toast";
+
+type SubscribeMutationInput = SubscribeInput & BotVerifyInput;
 
 export function useSubscribeNewsletter() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (data: SubscribeInput) => {
+    mutationFn: async (data: SubscribeMutationInput) => {
       const res = await fetch(api.newsletter.subscribe.path, {
         method: api.newsletter.subscribe.method,
         headers: { "Content-Type": "application/json" },

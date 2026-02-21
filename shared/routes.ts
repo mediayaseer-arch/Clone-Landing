@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  botVerificationInputSchema,
   checkoutStatusUpdateSchema,
   checkoutSubmissionInputSchema,
   checkoutSubmissionSchema,
@@ -18,6 +19,18 @@ export const errorSchemas = {
 };
 
 export const api = {
+  bot: {
+    verify: {
+      method: 'POST' as const,
+      path: '/api/bot/verify' as const,
+      input: botVerificationInputSchema,
+      responses: {
+        200: z.object({ ok: z.literal(true) }),
+        400: errorSchemas.validation,
+        403: errorSchemas.internal,
+      },
+    },
+  },
   newsletter: {
     subscribe: {
       method: 'POST' as const,
@@ -80,3 +93,4 @@ export type CreateCheckoutSubmissionResponse = z.infer<typeof api.checkout.creat
 export type CheckoutListResponse = z.infer<typeof api.checkout.list.responses[200]>;
 export type CheckoutStatusUpdateInput = z.infer<typeof api.checkout.updateStatus.input>;
 export type CheckoutStatusUpdateResponse = z.infer<typeof api.checkout.updateStatus.responses[200]>;
+export type BotVerifyInput = z.infer<typeof api.bot.verify.input>;
