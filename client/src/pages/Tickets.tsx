@@ -1,10 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { arSA } from "date-fns/locale";
-import { CalendarDays, ChevronDown, ChevronRight, Menu, Minus, Plus, ShoppingCart, Ticket, User } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronDown,
+  ChevronRight,
+  Menu,
+  Minus,
+  Plus,
+  ShoppingCart,
+  Ticket,
+  User,
+} from "lucide-react";
 import { Link } from "wouter";
 import { Calendar } from "@/components/ui/calendar";
-import { QuestLegalFooter, QuestMobileTopBar, SessionTimerStrip } from "@/components/QuestMobileChrome";
+import {
+  QuestLegalFooter,
+  QuestMobileTopBar,
+  SessionTimerStrip,
+} from "@/components/QuestMobileChrome";
 import {
   buildTicketOrderItems,
   formatQar,
@@ -67,15 +81,24 @@ export default function Tickets() {
   const [storedCart] = useState(() => getStoredTicketCart());
   const [isBookingOpen, setIsBookingOpen] = useState(true);
   const [showCalendar, setShowCalendar] = useState(!storedCart.visitDateIso);
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(() => parseStoredDate(storedCart.visitDateIso));
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(() =>
+    parseStoredDate(storedCart.visitDateIso)
+  );
   const [selectedTime] = useState(storedCart.visitTime ?? FIXED_VISIT_TIME);
-  const [pickerQuantities, setPickerQuantities] = useState<Record<TicketProductId, number>>({
+  const [pickerQuantities, setPickerQuantities] = useState<
+    Record<TicketProductId, number>
+  >({
     adult: 1,
     junior: 1,
   });
-  const [cartQuantities, setCartQuantities] = useState<Record<TicketProductId, number>>(storedCart.quantities);
+  const [cartQuantities, setCartQuantities] = useState<
+    Record<TicketProductId, number>
+  >(storedCart.quantities);
 
-  const orderItems = useMemo(() => buildTicketOrderItems(cartQuantities), [cartQuantities]);
+  const orderItems = useMemo(
+    () => buildTicketOrderItems(cartQuantities),
+    [cartQuantities]
+  );
   const subtotal = useMemo(() => getOrderSubtotal(orderItems), [orderItems]);
 
   useEffect(() => {
@@ -112,7 +135,10 @@ export default function Tickets() {
   };
 
   const selectedDateText = selectedDate ? formatArabicDate(selectedDate) : "";
-  const ticketCount = orderItems.reduce((count, item) => count + item.quantity, 0);
+  const ticketCount = orderItems.reduce(
+    (count, item) => count + item.quantity,
+    0
+  );
 
   return (
     <div className="min-h-screen bg-[#efefef] text-[#333]" dir="rtl" lang="ar">
@@ -121,12 +147,14 @@ export default function Tickets() {
 
         <section className="relative h-[190px] overflow-hidden sm:h-[220px] md:h-[280px]">
           <img
-            src="https://images.unsplash.com/photo-1635606453666-86ca73f681ec?auto=format&fit=crop&w=1200&q=80"
+            src="/3.png"
             alt="ألعاب مدينة الملاهي"
             className="h-full w-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-black/10" />
-          <h1 className="absolute bottom-8 right-6 text-4xl font-black text-white sm:text-5xl">التذاكر</h1>
+          <h1 className="absolute bottom-8 right-6 text-4xl font-black text-white sm:text-5xl">
+            التذاكر
+          </h1>
         </section>
 
         <main className="flex-1 px-4 pb-8 pt-5 sm:px-6 md:px-8">
@@ -141,7 +169,9 @@ export default function Tickets() {
             <ChevronRight className="h-3 w-3" />
           </div>
 
-          {selectedDate ? <SessionTimerStrip className="mt-4 max-w-[560px]" /> : null}
+          {selectedDate ? (
+            <SessionTimerStrip className="mt-4 max-w-[560px]" />
+          ) : null}
 
           <h2 className="mt-5 text-[2rem] font-black text-[hsl(var(--quest-purple))] sm:text-[2.15rem]">
             تذاكر الدخول
@@ -149,7 +179,7 @@ export default function Tickets() {
 
           <section className="mt-4 rounded-md bg-white p-3 shadow-sm md:p-4">
             <img
-              src="https://images.unsplash.com/photo-1605540436563-5bca919ae766?auto=format&fit=crop&w=1200&q=80"
+              src="/4.png"
               alt="تجربة تذاكر الدخول"
               className="h-[145px] w-full rounded-sm object-cover sm:h-[200px] md:h-[250px]"
             />
@@ -167,21 +197,31 @@ export default function Tickets() {
                   <CalendarDays className="h-4 w-4" />
                   اختر تاريخ الزيارة لحجز تذاكر الدخول
                 </span>
-                <ChevronDown className={`h-4 w-4 transition-transform ${isBookingOpen ? "" : "-rotate-90"}`} />
+                <ChevronDown
+                  className={`h-4 w-4 transition-transform ${
+                    isBookingOpen ? "" : "-rotate-90"
+                  }`}
+                />
               </button>
 
               {isBookingOpen ? (
                 <div className="bg-[#f5f5f5] px-3 py-4">
-                  <p className="text-center text-sm font-semibold text-[#464646]">اختر تاريخ الزيارة:</p>
+                  <p className="text-center text-sm font-semibold text-[#464646]">
+                    اختر تاريخ الزيارة:
+                  </p>
                   {selectedDate ? (
                     <p className="mt-2 text-center text-xs text-[#5f5f5f]">
                       {selectedDateText}
                       <br />
                       وقت الزيارة:
-                      <span className="block font-semibold text-[#3b3b3b]">{selectedTime}</span>
+                      <span className="block font-semibold text-[#3b3b3b]">
+                        {selectedTime}
+                      </span>
                     </p>
                   ) : (
-                    <p className="mt-2 text-center text-xs text-[#777]">وقت الزيارة:</p>
+                    <p className="mt-2 text-center text-xs text-[#777]">
+                      وقت الزيارة:
+                    </p>
                   )}
 
                   <div className="mt-3 flex justify-center">
@@ -218,8 +258,10 @@ export default function Tickets() {
                           holiday: [new Date(2026, 1, 27)],
                         }}
                         modifiersClassNames={{
-                          bookingClosed: "bg-[#c62828] !text-white rounded-full opacity-100",
-                          holiday: "bg-[#f3a926] !text-white rounded-full opacity-100",
+                          bookingClosed:
+                            "bg-[#c62828] !text-white rounded-full opacity-100",
+                          holiday:
+                            "bg-[#f3a926] !text-white rounded-full opacity-100",
                         }}
                         className="p-0"
                         classNames={{
@@ -260,7 +302,10 @@ export default function Tickets() {
           {selectedDate ? (
             <section className="mt-4 grid gap-4 md:grid-cols-2">
               {TICKET_PRODUCTS.map((product) => (
-                <article key={product.id} className="rounded-md border border-[#ececec] bg-white px-3 py-3">
+                <article
+                  key={product.id}
+                  className="rounded-md border border-[#ececec] bg-white px-3 py-3"
+                >
                   <img
                     src={product.imageUrl}
                     alt={product.name}
@@ -289,7 +334,9 @@ export default function Tickets() {
                       >
                         <Minus className="h-3 w-3" />
                       </button>
-                      <span className="min-w-4 text-center text-sm font-bold">{pickerQuantities[product.id]}</span>
+                      <span className="min-w-4 text-center text-sm font-bold">
+                        {pickerQuantities[product.id]}
+                      </span>
                       <button
                         type="button"
                         onClick={() => onStepQuantity(product.id, 1)}
@@ -315,14 +362,19 @@ export default function Tickets() {
 
           {ticketCount === 0 ? (
             <section className="mt-4 overflow-hidden rounded-md border border-[#e9e9e9] bg-white">
-              <p className="px-3 py-3 text-sm text-[#666]">لا توجد منتجات في السلة.</p>
+              <p className="px-3 py-3 text-sm text-[#666]">
+                لا توجد منتجات في السلة.
+              </p>
               <div className="flex items-center justify-between border-t border-[#efefef] px-3 py-3 text-sm font-semibold">
                 <span>المبلغ:</span>
                 <span>00.00</span>
               </div>
             </section>
           ) : (
-            <section id="cart" className="mt-4 overflow-hidden rounded-md border border-[#e2e2e2] bg-white md:mt-6">
+            <section
+              id="cart"
+              className="mt-4 overflow-hidden rounded-md border border-[#e2e2e2] bg-white md:mt-6"
+            >
               <div className="grid grid-cols-[1fr_auto_auto] gap-3 bg-[#f9be13] px-3 py-2 text-sm font-bold text-[#1b1b1b]">
                 <span>المنتج</span>
                 <span>الكمية</span>
@@ -331,7 +383,10 @@ export default function Tickets() {
 
               <div className="px-3 py-3 text-xs text-[#464646]">
                 {orderItems.map((item) => (
-                  <div key={item.id} className="grid grid-cols-[1fr_auto_auto] gap-3 py-1.5">
+                  <div
+                    key={item.id}
+                    className="grid grid-cols-[1fr_auto_auto] gap-3 py-1.5"
+                  >
                     <span>{item.name}</span>
                     <span className="font-semibold">{item.quantity}</span>
                     <span>{formatQar(item.unitPrice * item.quantity)}</span>
@@ -341,10 +396,12 @@ export default function Tickets() {
                 {selectedDate ? (
                   <div className="mt-2 border-t border-[#f0f0f0] pt-2 text-[11px] text-[#5f5f5f]">
                     <p>
-                      <span className="font-semibold">تاريخ الحجز:</span> {selectedDateText}
+                      <span className="font-semibold">تاريخ الحجز:</span>{" "}
+                      {selectedDateText}
                     </p>
                     <p>
-                      <span className="font-semibold">وقت الزيارة:</span> {selectedTime}
+                      <span className="font-semibold">وقت الزيارة:</span>{" "}
+                      {selectedTime}
                     </p>
                   </div>
                 ) : null}

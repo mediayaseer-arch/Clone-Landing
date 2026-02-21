@@ -1,19 +1,19 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Open+Sans:wght@400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+* {
+  font-family: "Almarai", sans-serif;
+}
 
 :root {
-  --font-sans: 'Open Sans', sans-serif;
-  --font-display: 'Montserrat', sans-serif;
-
   /* Quest Brand Colors */
   --quest-purple: 311 59% 30%; /* #7A206A */
-  --quest-yellow: 38 90% 55%;  /* #F3A926 */
-  --quest-green: 146 69% 33%;  /* #1A8E4C */
-  --quest-dark: 260 60% 10%;   /* Deep space blue/black */
-  
+  --quest-yellow: 38 90% 55%; /* #F3A926 */
+  --quest-green: 146 69% 33%; /* #1A8E4C */
+  --quest-dark: 260 60% 10%; /* Deep space blue/black */
+
   --background: 0 0% 100%;
   --foreground: 311 59% 30%; /* Text is often purple in this brand */
 
@@ -50,7 +50,12 @@
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
   }
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: var(--font-display);
     @apply font-bold tracking-tight;
   }
@@ -58,12 +63,12 @@
 
 @layer utilities {
   .text-shadow {
-    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
   }
   .text-shadow-lg {
-    text-shadow: 0 4px 8px rgba(0,0,0,0.5);
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
   }
-  
+
   .clip-diagonal {
     clip-path: polygon(0 0, 100% 0, 100% 85%, 0 100%);
   }
