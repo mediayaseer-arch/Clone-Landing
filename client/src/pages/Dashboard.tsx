@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   CheckCircle2,
@@ -85,6 +86,18 @@ function getPaymentStatusLabel(status: string): string {
   return getPaymentStatusMeta(status).label;
 }
 
+function getStreamStatusLabel(status: "connecting" | "connected" | "reconnecting"): string {
+  if (status === "connected") {
+    return "متصل";
+  }
+
+  if (status === "reconnecting") {
+    return "يعيد الاتصال...";
+  }
+
+  return "جاري الاتصال...";
+}
+
 function scrollToOrder(orderId: string): void {
   const target = document.getElementById(`order-${orderId}`);
   if (!target) {
@@ -96,6 +109,40 @@ function scrollToOrder(orderId: string): void {
 
 export default function Dashboard() {
   const realtimeIntervalMs = 3000;
+  const queryClient = useQueryClient();
+  const [streamStatus, setStreamStatus] = useState<
+    "connecting" | "connected" | "reconnecting"
+  >("connecting");
+
+  useEffect(() => {
+    const stream = new EventSource(api.checkout.stream.path, {
+      withCredentials: true,
+    });
+
+    const handleReady = (_event: Event) => {
+      setStreamStatus("connected");
+    };
+
+    const handleCheckoutChanged = (_event: Event) => {
+      setStreamStatus("connected");
+      void queryClient.invalidateQueries({
+        queryKey: [api.checkout.list.path],
+      });
+    };
+
+    stream.addEventListener("ready", handleReady);
+    stream.addEventListener("checkout_changed", handleCheckoutChanged);
+    stream.onerror = () => {
+      setStreamStatus("reconnecting");
+    };
+
+    return () => {
+      stream.removeEventListener("ready", handleReady);
+      stream.removeEventListener("checkout_changed", handleCheckoutChanged);
+      stream.close();
+    };
+  }, [queryClient]);
+
   const {
     data,
     isLoading,
@@ -105,10 +152,12 @@ export default function Dashboard() {
     dataUpdatedAt,
   } = useQuery<CheckoutListResponse>({
     queryKey: [api.checkout.list.path],
-    queryFn: async () => {
-      const response = await fetch(api.checkout.list.path, {
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`${api.checkout.list.path}?ts=${Date.now()}`, {
         method: api.checkout.list.method,
         credentials: "include",
+        cache: "no-store",
+        signal,
       });
 
       if (!response.ok) {
@@ -147,6 +196,9 @@ export default function Dashboard() {
                   {dataUpdatedAt
                     ? formatArabicDateTime(new Date(dataUpdatedAt).toISOString())
                     : "بانتظار أول مزامنة"}
+                </p>
+                <p className="mt-1">
+                  قناة التحديث المباشر: {getStreamStatusLabel(streamStatus)}
                 </p>
               </div>
               <button

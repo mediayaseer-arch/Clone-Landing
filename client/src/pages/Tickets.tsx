@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { format } from "date-fns";
+import { addDays, format, startOfDay } from "date-fns";
 import { arSA } from "date-fns/locale";
 import {
   CalendarDays,
@@ -30,9 +30,11 @@ import {
 } from "@/lib/ticket-cart";
 
 const FIXED_VISIT_TIME = "١٧:٣٠ - ٢٣:٥٩";
+const BOOKING_WINDOW_DAYS = 90;
 
-const openDaysInFebruary = new Set([20, 21, 23, 24, 25, 26, 27]);
-const bookingClosedDays = new Set([22]);
+const bookingClosedDateIsos = new Set(["2026-02-22"]);
+const holidayDateIsos = new Set(["2026-02-27"]);
+
 function parseStoredDate(storedDate: string | null): Date | undefined {
   if (!storedDate) {
     return undefined;
@@ -48,25 +50,34 @@ function parseStoredDate(storedDate: string | null): Date | undefined {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
-function isDayInMonth(date: Date): boolean {
-  return date.getFullYear() === 2026 && date.getMonth() === 1;
+function toDateOnly(value: Date): Date {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
 }
 
-function getDayNumber(date: Date): number {
-  return date.getDate();
+function toDateOnlyIso(value: Date): string {
+  return format(value, "yyyy-MM-dd");
 }
 
-function isOpenDate(date: Date): boolean {
-  if (!isDayInMonth(date)) {
+function parseDateOnlyIso(value: string): Date | undefined {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) {
+    return undefined;
+  }
+
+  const [, year, month, day] = match;
+  return new Date(Number(year), Number(month) - 1, Number(day));
+}
+
+function isBookableDate(date: Date, minDate: Date, maxDate: Date): boolean {
+  const normalizedDate = toDateOnly(date);
+  if (
+    normalizedDate.getTime() < minDate.getTime() ||
+    normalizedDate.getTime() > maxDate.getTime()
+  ) {
     return false;
   }
 
-  const day = getDayNumber(date);
-  if (bookingClosedDays.has(day)) {
-    return false;
-  }
-
-  return openDaysInFebruary.has(day);
+  return !bookingClosedDateIsos.has(toDateOnlyIso(normalizedDate));
 }
 
 function formatArabicDate(date: Date): string {
@@ -79,6 +90,25 @@ function formatArabicDate(date: Date): string {
 
 export default function Tickets() {
   const [storedCart] = useState(() => getStoredTicketCart());
+  const minBookingDate = useMemo(() => startOfDay(new Date()), []);
+  const maxBookingDate = useMemo(
+    () => addDays(minBookingDate, BOOKING_WINDOW_DAYS),
+    [minBookingDate]
+  );
+  const bookingClosedDates = useMemo(
+    () =>
+      Array.from(bookingClosedDateIsos)
+        .map(parseDateOnlyIso)
+        .filter((date): date is Date => Boolean(date)),
+    []
+  );
+  const holidayDates = useMemo(
+    () =>
+      Array.from(holidayDateIsos)
+        .map(parseDateOnlyIso)
+        .filter((date): date is Date => Boolean(date)),
+    []
+  );
   const [isBookingOpen, setIsBookingOpen] = useState(true);
   const [showCalendar, setShowCalendar] = useState(!storedCart.visitDateIso);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(() =>
@@ -108,6 +138,19 @@ export default function Tickets() {
       quantities: cartQuantities,
     });
   }, [cartQuantities, selectedDate, selectedTime]);
+
+  useEffect(() => {
+    if (!selectedDate) {
+      return;
+    }
+
+    if (isBookableDate(selectedDate, minBookingDate, maxBookingDate)) {
+      return;
+    }
+
+    setSelectedDate(undefined);
+    setShowCalendar(true);
+  }, [maxBookingDate, minBookingDate, selectedDate]);
 
   const onStepQuantity = (productId: TicketProductId, delta: number) => {
     setPickerQuantities((current) => ({
@@ -239,23 +282,39 @@ export default function Tickets() {
                       <Calendar
                         mode="single"
                         locale={arSA}
-                        month={new Date(2026, 1, 1)}
+                        defaultMonth={selectedDate ?? minBookingDate}
                         selected={selectedDate}
                         onSelect={(day) => {
-                          if (!day || !isOpenDate(day)) {
+                          if (
+                            !day ||
+                            !isBookableDate(day, minBookingDate, maxBookingDate)
+                          ) {
                             return;
                           }
 
                           setSelectedDate(day);
                           setShowCalendar(false);
                         }}
-                        fromMonth={new Date(2026, 1, 1)}
-                        toMonth={new Date(2026, 1, 1)}
-                        disableNavigation
-                        disabled={(day) => !isOpenDate(day)}
+                        fromMonth={
+                          new Date(
+                            minBookingDate.getFullYear(),
+                            minBookingDate.getMonth(),
+                            1
+                          )
+                        }
+                        toMonth={
+                          new Date(
+                            maxBookingDate.getFullYear(),
+                            maxBookingDate.getMonth(),
+                            1
+                          )
+                        }
+                        disabled={(day) =>
+                          !isBookableDate(day, minBookingDate, maxBookingDate)
+                        }
                         modifiers={{
-                          bookingClosed: [new Date(2026, 1, 22)],
-                          holiday: [new Date(2026, 1, 27)],
+                          bookingClosed: bookingClosedDates,
+                          holiday: holidayDates,
                         }}
                         modifiersClassNames={{
                           bookingClosed:
@@ -425,12 +484,22 @@ export default function Tickets() {
                   >
                     تفريغ السلة
                   </button>
-                  <Link
-                    href="/checkout"
-                    className="block w-full rounded bg-[hsl(var(--quest-purple))] px-3 py-2 text-center text-sm font-semibold text-white hover:opacity-90"
-                  >
-                    المتابعة إلى الدفع
-                  </Link>
+                  {selectedDate ? (
+                    <Link
+                      href="/checkout"
+                      className="block w-full rounded bg-[hsl(var(--quest-purple))] px-3 py-2 text-center text-sm font-semibold text-white hover:opacity-90"
+                    >
+                      المتابعة إلى الدفع
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      className="w-full cursor-not-allowed rounded bg-[hsl(var(--quest-purple))]/60 px-3 py-2 text-center text-sm font-semibold text-white"
+                    >
+                      اختر تاريخ الزيارة أولًا
+                    </button>
+                  )}
                 </div>
               </div>
             </section>

@@ -167,7 +167,7 @@ export default function Checkout() {
   const visitDate = parseStoredDate(storedCart.visitDateIso);
   const bookingDateText = visitDate
     ? formatArabicDate(visitDate)
-    : "١٧ فبراير ٢٠٢٦";
+    : "غير محدد";
   const visitTime = storedCart.visitTime ?? "١٧:٣٠ - ٢٣:٥٩";
   const cardPreviewNumber = cardDetails.cardNumber || "•••• •••• •••• ••••";
   const cardPreviewName =
@@ -191,6 +191,14 @@ export default function Checkout() {
     }
     if (otpVerifyTimerRef.current) {
       window.clearTimeout(otpVerifyTimerRef.current);
+    }
+
+    if (!visitDate || !storedCart.visitDateIso) {
+      setPaymentStep("idle");
+      setPaymentError(
+        "يرجى اختيار تاريخ الزيارة من صفحة التذاكر قبل المتابعة إلى الدفع."
+      );
+      return;
     }
 
     const billingValidationError = validateBillingDetails(billingDetails);
