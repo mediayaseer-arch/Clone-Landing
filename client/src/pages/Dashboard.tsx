@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, Database, RefreshCw } from "lucide-react";
-import { api, type CheckoutListResponse } from "@shared/routes";
+import type { CheckoutSubmission } from "@shared/schema";
 import { QuestLegalFooter, QuestMobileTopBar } from "@/components/QuestMobileChrome";
 import { formatQar } from "@/lib/ticket-cart";
+import { listCheckoutSubmissions } from "@/lib/firebase";
 
 function formatArabicDateTime(value: string): string {
   const date = new Date(value);
@@ -29,21 +30,9 @@ export default function Dashboard() {
     error,
     refetch,
     isFetching,
-  } = useQuery<CheckoutListResponse>({
-    queryKey: [api.checkout.list.path],
-    queryFn: async () => {
-      const response = await fetch(api.checkout.list.path, {
-        method: api.checkout.list.method,
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        const errorData = (await response.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(errorData?.message ?? "تعذر تحميل البيانات من Firestore.");
-      }
-
-      return api.checkout.list.responses[200].parse(await response.json());
-    },
+  } = useQuery<CheckoutSubmission[]>({
+    queryKey: ["firebase", "checkout-submissions"],
+    queryFn: () => listCheckoutSubmissions(),
   });
 
   return (

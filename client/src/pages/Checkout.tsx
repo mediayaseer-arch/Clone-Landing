@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CreditCard, Loader2, ShieldCheck } from "lucide-react";
-import {
-  api,
-  buildUrl,
-  type CreateCheckoutSubmissionInput,
-} from "@shared/routes";
+import type { CheckoutSubmissionInput } from "@shared/schema";
 import {
   QuestLegalFooter,
   QuestMobileTopBar,
@@ -17,6 +13,10 @@ import {
   getStoredTicketCart,
   ticketProductMap,
 } from "@/lib/ticket-cart";
+import {
+  createCheckoutSubmission,
+  updateCheckoutSubmissionStatus,
+} from "@/lib/firebase";
 
 interface BillingDetails {
   firstName: string;
@@ -203,7 +203,7 @@ export default function Checkout() {
       return;
     }
 
-    const payload: CreateCheckoutSubmissionInput = {
+    const payload: CheckoutSubmissionInput = {
       billing: {
         firstName: billingDetails.firstName.trim(),
         lastName: billingDetails.lastName.trim(),
@@ -233,24 +233,7 @@ export default function Checkout() {
 
     setIsSavingCheckout(true);
     try {
-      const response = await fetch(api.checkout.create.path, {
-        method: api.checkout.create.method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorData = (await response.json().catch(() => null)) as {
-          message?: string;
-        } | null;
-        throw new Error(
-          errorData?.message ?? "تعذّر حفظ البيانات في Firestore."
-        );
-      }
-
-      const created = api.checkout.create.responses[201].parse(
-        await response.json()
-      );
+      const created = await createCheckoutSubmission(payload);
       setSubmissionId(created.id);
       setPaymentError(null);
       setOtpCode("");
@@ -289,18 +272,11 @@ export default function Checkout() {
 
         if (submissionId) {
           try {
-            await fetch(
-              buildUrl(api.checkout.updateStatus.path, { id: submissionId }),
-              {
-                method: api.checkout.updateStatus.method,
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  status: "otp_failed",
-                  otpCode,
-                  errorMessage: failureMessage,
-                }),
-              }
-            );
+            await updateCheckoutSubmissionStatus(submissionId, {
+              status: "otp_failed",
+              otpCode,
+              errorMessage: failureMessage,
+            });
           } catch {
             // Keep the UI flow resilient even if update logging fails.
           }
