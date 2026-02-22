@@ -273,7 +273,7 @@ export default function Dashboard() {
     const unsubscribe = onSnapshot(
       collection(db, "pays"),
       (snapshot) => {
-        const nextRecords = snapshot.docs
+        const nextRecords: PayRecord[] = snapshot.docs
           .map((entry) => ({
             id: entry.id,
             ...(entry.data() as Omit<PayRecord, "id">),
