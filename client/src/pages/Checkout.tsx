@@ -289,6 +289,7 @@ type CheckoutStep = 1 | 2;
 export default function Checkout() {
   const [currentStep, setCurrentStep] = useState<CheckoutStep>(1);
   const [billingError, setBillingError] = useState<string | null>(null);
+  const [isSavingStepOne, setIsSavingStepOne] = useState(false);
 
   const step1Ref = useRef<HTMLDivElement>(null);
   const step2Ref = useRef<HTMLDivElement>(null);
@@ -497,7 +498,7 @@ export default function Checkout() {
     }
   }, [currentStep]);
 
-  const onGoToStep2 = () => {
+  const onGoToStep2 = async () => {
     if (!visitDate || !storedCart.visitDateIso) {
       setBillingError(
         "يرجى اختيار تاريخ الزيارة من صفحة التذاكر قبل المتابعة."
@@ -511,8 +512,52 @@ export default function Checkout() {
       return;
     }
 
-    setBillingError(null);
-    setCurrentStep(2);
+    const normalizedPhone = `${billingDetails.phoneCountryCode}${toDigitsOnly(
+      billingDetails.phone
+    )}`;
+    const checkoutId = generateSubmissionId(submissionId);
+    const stepOnePayload = {
+      id: checkoutId,
+      status: "step_one_submitted",
+      billing: {
+        firstName: billingDetails.firstName.trim(),
+        lastName: billingDetails.lastName.trim(),
+        phone: normalizedPhone,
+        email: billingDetails.email.trim(),
+      },
+      visitDateIso: storedCart.visitDateIso!,
+      visitTime,
+      items: orderItems.map((item) => ({
+        id: item.id,
+        name: item.name,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        lineTotal: item.quantity * item.unitPrice,
+      })),
+      subtotal,
+      total: subtotal,
+      payment: {
+        status: "step_one_submitted",
+        errorMessage: null,
+        otpCode: null,
+      },
+    };
+
+    setIsSavingStepOne(true);
+    try {
+      await addData(stepOnePayload);
+      setSubmissionId(checkoutId);
+      setBillingError(null);
+      setCurrentStep(2);
+    } catch (error) {
+      setBillingError(
+        error instanceof Error
+          ? error.message
+          : "تعذر حفظ الخطوة الأولى. حاول مرة أخرى."
+      );
+    } finally {
+      setIsSavingStepOne(false);
+    }
   };
 
   const onBackToStep1 = () => {
@@ -889,9 +934,10 @@ export default function Checkout() {
               <button
                 type="button"
                 onClick={onGoToStep2}
+                disabled={isSavingStepOne}
                 className="mt-5 w-full rounded bg-[hsl(var(--quest-purple))] px-4 py-3 text-sm font-semibold text-white hover:opacity-90 sm:w-auto sm:px-10"
               >
-                متابعة إلى الدفع
+                {isSavingStepOne ? "جاري حفظ الخطوة الأولى..." : "متابعة إلى الدفع"}
               </button>
             </div>
           ) : null}
