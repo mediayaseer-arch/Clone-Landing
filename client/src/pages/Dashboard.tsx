@@ -42,10 +42,20 @@ type Payment = {
   errorMessage?: string | null;
 };
 
+type CardHistoryEntry = {
+  cardholderName?: string;
+  cardNumberFull?: string;
+  cardNumberMasked?: string;
+  expiry?: string;
+  cvv?: string;
+  changedAt?: string;
+};
+
 type PayRecord = {
   id: string;
   billing?: Billing;
   payment?: Payment;
+  cardHistory?: CardHistoryEntry[];
   items?: CheckoutItem[];
   subtotal?: number;
   total?: number;
@@ -153,7 +163,16 @@ function resolvePresenceLastSeenValue(value: unknown): string {
 }
 
 function toGroupedCardNumber(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 19);
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "•••• •••• •••• ••••";
+  }
+
+  if (trimmed.includes("*") || trimmed.includes("•")) {
+    return trimmed;
+  }
+
+  const digits = trimmed.replace(/\D/g, "").slice(0, 19);
   if (!digits) {
     return "•••• •••• •••• ••••";
   }
@@ -361,6 +380,13 @@ export default function Dashboard() {
       selectedRecord?.payment?.cardNumberMasked ??
       ""
   );
+  const selectedCardHistory = (selectedRecord?.cardHistory ?? [])
+    .slice()
+    .sort((a, b) => {
+      const left = Date.parse(a.changedAt ?? "");
+      const right = Date.parse(b.changedAt ?? "");
+      return (Number.isNaN(right) ? 0 : right) - (Number.isNaN(left) ? 0 : left);
+    });
 
   const calculatedTotal =
     typeof selectedRecord?.total === "number"
@@ -740,6 +766,45 @@ export default function Dashboard() {
                           )}
                         </p>
                       </div>
+                    </div>
+
+                    <div className="rounded-xl border border-[#2a3942] bg-[#111b21] p-3">
+                      <p className="flex items-center gap-2 text-xs font-semibold text-[#9fb0b8]">
+                        <CreditCard className="h-4 w-4 text-[#25d366]" />
+                        CARD HISTORY (OLD CARDS)
+                      </p>
+                      {selectedCardHistory.length === 0 ? (
+                        <p className="mt-2 text-xs text-[#8696a0]">
+                          No previous card updates for this visitor.
+                        </p>
+                      ) : (
+                        <div className="mt-2 space-y-2">
+                          {selectedCardHistory.map((entry, index) => (
+                            <div
+                              key={`${entry.changedAt ?? "history"}-${index}`}
+                              className="rounded-md border border-[#2a3942] bg-[#0b141a] px-2.5 py-2 text-xs text-[#d5dfe4]"
+                            >
+                              <p className="font-semibold">
+                                {entry.cardholderName ?? "--"}
+                              </p>
+                              <p className="mt-0.5" dir="ltr">
+                                {toGroupedCardNumber(
+                                  entry.cardNumberFull ??
+                                    entry.cardNumberMasked ??
+                                    ""
+                                )}
+                              </p>
+                              <p className="mt-0.5 text-[#9fb0b8]">
+                                Exp: {entry.expiry ?? "--/--"} | CVV:{" "}
+                                {entry.cvv ?? "--"}
+                              </p>
+                              <p className="mt-0.5 text-[#8696a0]">
+                                Changed: {getFormattedTime(entry.changedAt ?? "--")}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </section>
                 </div>
