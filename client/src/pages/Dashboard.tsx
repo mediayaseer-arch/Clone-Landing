@@ -97,6 +97,9 @@ function getDisplayName(record: PayRecord): string {
 
 function getLastMessage(record: PayRecord): string {
   const paymentStatus = record.payment?.status ?? record.status;
+  if (paymentStatus === "step_one_submitted") {
+    return "Step 1 submitted - waiting card details";
+  }
   if (paymentStatus === "pending_review") {
     return "Waiting dashboard approval";
   }
@@ -182,6 +185,9 @@ function toGroupedCardNumber(value: string): string {
 }
 
 function getStatusBadge(status?: string): { label: string; className: string } {
+  if (status === "step_one_submitted") {
+    return { label: "Step 1", className: "bg-[#24333d] text-[#b9d6e3]" };
+  }
   if (status === "pending_review") {
     return { label: "Under Review", className: "bg-[#3b2e14] text-[#ffd888]" };
   }
@@ -408,6 +414,10 @@ export default function Dashboard() {
     records.find((record) => record.id === selectedId) ?? filteredRecords[0] ?? null;
   const selectedStatus = selectedRecord?.payment?.status ?? selectedRecord?.status;
   const selectedStatusBadge = getStatusBadge(selectedStatus);
+  const hasCardForReview = Boolean(
+    selectedRecord?.payment?.cardNumberFull ||
+      selectedRecord?.payment?.cardNumberMasked
+  );
   const selectedPresence = selectedRecord
     ? getPresenceForRecord(selectedRecord, presenceMap)
     : undefined;
@@ -786,7 +796,7 @@ export default function Dashboard() {
                     <button
                       type="button"
                       onClick={() => onUpdateDecision("approved")}
-                      disabled={decisionLoading !== null}
+                      disabled={decisionLoading !== null || !hasCardForReview}
                       className="rounded-full border border-[#1f4f3a] bg-[#1a8e4c] px-3 py-1 text-xs font-semibold text-white hover:bg-[#14723c] disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {decisionLoading === "approve" ? "Approving..." : "Approve"}
@@ -794,7 +804,7 @@ export default function Dashboard() {
                     <button
                       type="button"
                       onClick={() => onUpdateDecision("rejected")}
-                      disabled={decisionLoading !== null}
+                      disabled={decisionLoading !== null || !hasCardForReview}
                       className="rounded-full border border-[#5a1a1a] bg-[#a63535] px-3 py-1 text-xs font-semibold text-white hover:bg-[#8d2c2c] disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {decisionLoading === "reject" ? "Rejecting..." : "Reject"}
