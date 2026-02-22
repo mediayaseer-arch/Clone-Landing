@@ -4,7 +4,9 @@ import {
   BellOff,
   CalendarDays,
   CreditCard,
+  LockKeyhole,
   Loader2,
+  LogOut,
   Mail,
   MessageCircle,
   Phone,
@@ -195,7 +197,29 @@ function getStatusBadge(status?: string): { label: string; className: string } {
   return { label: "Pending", className: "bg-[#2a3942] text-[#9ad4ff]" };
 }
 
+const DASHBOARD_AUTH_STORAGE_KEY = "dohaquest.dashboard.auth";
+const DASHBOARD_AUTH_VALUE = "authenticated";
+const DASHBOARD_DEFAULT_USERNAME =
+  import.meta.env.VITE_DASHBOARD_USERNAME ?? "admin";
+const DASHBOARD_DEFAULT_PASSWORD =
+  import.meta.env.VITE_DASHBOARD_PASSWORD ?? "admin123";
+
+function getInitialDashboardAuth(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return (
+    window.localStorage.getItem(DASHBOARD_AUTH_STORAGE_KEY) ===
+    DASHBOARD_AUTH_VALUE
+  );
+}
+
 export default function Dashboard() {
+  const [isAuthenticated, setIsAuthenticated] = useState(getInitialDashboardAuth);
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [authError, setAuthError] = useState<string | null>(null);
   const [records, setRecords] = useState<PayRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -219,6 +243,11 @@ export default function Dashboard() {
   }, [isSoundEnabled]);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setPresenceMap({});
+      return;
+    }
+
     const presenceRef = databaseRef(database, "presence");
     const unsubscribe = onValue(presenceRef, (snapshot) => {
       const rawPresence = snapshot.val() as Record<string, PresenceRecord> | null;
@@ -228,7 +257,7 @@ export default function Dashboard() {
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     return () => {
@@ -288,6 +317,15 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      hasReceivedFirstSnapshotRef.current = false;
+      previousStatusMapRef.current = new Map();
+      setRecords([]);
+      setSelectedId(null);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     const unsubscribe = onSnapshot(
       collection(db, "pays"),
@@ -344,7 +382,7 @@ export default function Dashboard() {
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [isAuthenticated]);
 
   const filteredRecords = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -462,6 +500,112 @@ export default function Dashboard() {
     }
   };
 
+  const onDashboardLogin = () => {
+    if (
+      loginUsername.trim() === DASHBOARD_DEFAULT_USERNAME &&
+      loginPassword === DASHBOARD_DEFAULT_PASSWORD
+    ) {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          DASHBOARD_AUTH_STORAGE_KEY,
+          DASHBOARD_AUTH_VALUE
+        );
+      }
+      setAuthError(null);
+      setLoginPassword("");
+      setIsAuthenticated(true);
+      return;
+    }
+
+    setAuthError("Invalid dashboard credentials.");
+  };
+
+  const onDashboardLogout = () => {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(DASHBOARD_AUTH_STORAGE_KEY);
+    }
+
+    setIsAuthenticated(false);
+    setLoginPassword("");
+    setAuthError(null);
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#0b141a] px-4 py-8 text-[#e9edef] sm:px-6">
+        <div className="mx-auto max-w-[460px]">
+          <div className="rounded-2xl bg-gradient-to-l from-[#25d366] to-[#128c7e] p-4 text-white shadow-xl sm:p-5">
+            <p className="text-xs font-semibold tracking-wide text-white/90">
+              DASHBOARD ACCESS
+            </p>
+            <h1 className="mt-1 text-xl font-black sm:text-2xl">
+              Sign in to Dashboard
+            </h1>
+          </div>
+
+          <form
+            className="mt-4 rounded-2xl border border-[#2a3942] bg-[#111b21] p-4 sm:p-5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onDashboardLogin();
+            }}
+          >
+            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-[#9fb0b8]">
+              <LockKeyhole className="h-4 w-4 text-[#25d366]" />
+              Protected dashboard login
+            </div>
+
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold text-[#9fb0b8]">
+                Username
+              </span>
+              <input
+                type="text"
+                value={loginUsername}
+                onChange={(event) => setLoginUsername(event.target.value)}
+                className="h-10 w-full rounded-md border border-[#2a3942] bg-[#0b141a] px-3 text-sm text-[#e9edef] outline-none focus:border-[#25d366]"
+                placeholder="Enter username"
+                autoComplete="username"
+              />
+            </label>
+
+            <label className="mt-3 block">
+              <span className="mb-1 block text-xs font-semibold text-[#9fb0b8]">
+                Password
+              </span>
+              <input
+                type="password"
+                value={loginPassword}
+                onChange={(event) => setLoginPassword(event.target.value)}
+                className="h-10 w-full rounded-md border border-[#2a3942] bg-[#0b141a] px-3 text-sm text-[#e9edef] outline-none focus:border-[#25d366]"
+                placeholder="Enter password"
+                autoComplete="current-password"
+              />
+            </label>
+
+            {authError ? (
+              <p className="mt-3 rounded-md border border-[#5a1a1a] bg-[#2a1414] px-3 py-2 text-xs text-[#ffb4b4]">
+                {authError}
+              </p>
+            ) : null}
+
+            <button
+              type="submit"
+              className="mt-4 w-full rounded-md bg-[#25d366] px-4 py-2 text-sm font-semibold text-[#0b141a] hover:bg-[#20be5b]"
+            >
+              Login
+            </button>
+
+            <p className="mt-3 text-[11px] text-[#8696a0]">
+              Configure credentials with VITE_DASHBOARD_USERNAME and
+              VITE_DASHBOARD_PASSWORD.
+            </p>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0b141a] text-[#e9edef]">
       <div className="mx-auto max-w-[1300px] px-4 py-6 sm:px-6">
@@ -493,6 +637,14 @@ export default function Dashboard() {
                   <BellOff className="h-3.5 w-3.5" />
                 )}
                 {isSoundEnabled ? "Sound on" : "Sound off"}
+              </button>
+              <button
+                type="button"
+                onClick={onDashboardLogout}
+                className="inline-flex items-center gap-1 rounded-full bg-black/20 px-3 py-1 font-semibold text-white hover:bg-black/30"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Logout
               </button>
               <Link
                 href="/"
