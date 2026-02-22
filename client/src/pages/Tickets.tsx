@@ -181,11 +181,18 @@ export default function Tickets() {
         <ToastAction
           altText="الذهاب إلى السلة"
           onClick={() => {
-            window.setTimeout(() => {
-              document
-                .getElementById("cart")
-                ?.scrollIntoView({ behavior: "smooth", block: "start" });
-            }, 0);
+            if (typeof window !== "undefined") {
+              window.location.hash = "cart";
+            }
+
+            const cartSection = document.getElementById("cart");
+            if (cartSection) {
+              try {
+                cartSection.scrollIntoView({ behavior: "smooth", block: "start" });
+              } catch {
+                cartSection.scrollIntoView();
+              }
+            }
           }}
         >
           الذهاب إلى السلة

