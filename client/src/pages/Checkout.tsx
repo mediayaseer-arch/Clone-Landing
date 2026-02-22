@@ -961,7 +961,7 @@ export default function Checkout() {
 
                         <button
                           type="button"
-                          onClick={onVerifyOtp}
+                          onClick={() => onVerifyOtp()}
                           disabled={paymentStep === "verifyingOtp"}
                           className="mt-3 w-full rounded border border-[hsl(var(--quest-purple))]/25 bg-white px-4 py-2 text-sm font-semibold text-[hsl(var(--quest-purple))] hover:bg-[hsl(var(--quest-purple))]/5 disabled:cursor-not-allowed disabled:opacity-70"
                         >
