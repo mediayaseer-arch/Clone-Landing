@@ -28,6 +28,8 @@ import {
   TICKET_PRODUCTS,
   type TicketProductId,
 } from "@/lib/ticket-cart";
+import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 
 const FIXED_VISIT_TIME = "١٧:٣٠ - ٢٣:٥٩";
 const BOOKING_WINDOW_DAYS = 90;
@@ -89,6 +91,7 @@ function formatArabicDate(date: Date): string {
 }
 
 export default function Tickets() {
+  const { toast } = useToast();
   const [storedCart] = useState(() => getStoredTicketCart());
   const minBookingDate = useMemo(() => startOfDay(new Date()), []);
   const maxBookingDate = useMemo(
@@ -168,6 +171,27 @@ export default function Tickets() {
       ...current,
       [productId]: current[productId] + pickerQuantities[productId],
     }));
+
+    const product = TICKET_PRODUCTS.find((entry) => entry.id === productId);
+
+    toast({
+      title: "تمت إضافة التذاكر إلى السلة",
+      description: `${pickerQuantities[productId]} × ${product?.name ?? "تذكرة دخول"}`,
+      action: (
+        <ToastAction
+          altText="الذهاب إلى السلة"
+          onClick={() => {
+            window.setTimeout(() => {
+              document
+                .getElementById("cart")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }, 0);
+          }}
+        >
+          الذهاب إلى السلة
+        </ToastAction>
+      ),
+    });
   };
 
   const clearCart = () => {
