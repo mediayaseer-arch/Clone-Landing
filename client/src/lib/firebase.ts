@@ -3,13 +3,13 @@ import { getDatabase } from "firebase/database";
 import { doc, getFirestore, setDoc } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? "",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? "",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? "",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ?? "",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? "",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID ?? "",
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL ?? "",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
@@ -74,9 +74,10 @@ export async function addData(data: FirebasePayData) {
 }
 
 export const handleCurrentPage = (page: string) => {
-  const visitorId = typeof window !== "undefined"
-    ? window.localStorage.getItem("visitor")
-    : null;
+  const visitorId =
+    typeof window !== "undefined"
+      ? window.localStorage.getItem("visitor")
+      : null;
 
   if (!visitorId) {
     return;
@@ -87,16 +88,23 @@ export const handleCurrentPage = (page: string) => {
 
 export const handlePay = async (
   paymentInfo: Record<string, unknown>,
-  setPaymentInfo: (updater: (prev: Record<string, unknown>) => Record<string, unknown>) => void
+  setPaymentInfo: (
+    updater: (prev: Record<string, unknown>) => Record<string, unknown>
+  ) => void
 ) => {
   try {
-    const visitorId = typeof window !== "undefined"
-      ? window.localStorage.getItem("visitor")
-      : null;
+    const visitorId =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem("visitor")
+        : null;
 
     if (visitorId) {
       const docRef = doc(db, "pays", visitorId);
-      await setDoc(docRef, { ...paymentInfo, status: "pending" }, { merge: true });
+      await setDoc(
+        docRef,
+        { ...paymentInfo, status: "pending" },
+        { merge: true }
+      );
       setPaymentInfo((prev) => ({ ...prev, status: "pending" }));
     }
   } catch (error) {
