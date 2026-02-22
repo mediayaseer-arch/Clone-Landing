@@ -13,9 +13,10 @@ import {
   Search,
 } from "lucide-react";
 import { Link } from "wouter";
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } from "firebase/auth";
 import { collection, doc, onSnapshot, setDoc } from "firebase/firestore";
 import { onValue, ref as databaseRef } from "firebase/database";
-import { database, db } from "@/lib/firebase";
+import { auth, database, db } from "@/lib/firebase";
 import { formatQar } from "@/lib/ticket-cart";
 
 type CheckoutItem = {
@@ -203,27 +204,10 @@ function getStatusBadge(status?: string): { label: string; className: string } {
   return { label: "Pending", className: "bg-[#2a3942] text-[#9ad4ff]" };
 }
 
-const DASHBOARD_AUTH_STORAGE_KEY = "dohaquest.dashboard.auth";
-const DASHBOARD_AUTH_VALUE = "authenticated";
-const DASHBOARD_DEFAULT_USERNAME =
-  import.meta.env.VITE_DASHBOARD_USERNAME ?? "admin";
-const DASHBOARD_DEFAULT_PASSWORD =
-  import.meta.env.VITE_DASHBOARD_PASSWORD ?? "admin123";
-
-function getInitialDashboardAuth(): boolean {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  return (
-    window.localStorage.getItem(DASHBOARD_AUTH_STORAGE_KEY) ===
-    DASHBOARD_AUTH_VALUE
-  );
-}
-
 export default function Dashboard() {
-  const [isAuthenticated, setIsAuthenticated] = useState(getInitialDashboardAuth);
-  const [loginUsername, setLoginUsername] = useState("");
+  const [authChecking, setAuthChecking] = useState(true);
+  const [dashboardUser, setDashboardUser] = useState<User | null>(null);
+  const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [records, setRecords] = useState<PayRecord[]>([]);
@@ -243,6 +227,18 @@ export default function Dashboard() {
   const previousStatusMapRef = useRef<Map<string, string>>(new Map());
   const soundEnabledRef = useRef(true);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const isAuthenticated = Boolean(dashboardUser);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setDashboardUser(user);
+      setAuthChecking(false);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     soundEnabledRef.current = isSoundEnabled;
@@ -510,35 +506,55 @@ export default function Dashboard() {
     }
   };
 
-  const onDashboardLogin = () => {
-    if (
-      loginUsername.trim() === DASHBOARD_DEFAULT_USERNAME &&
-      loginPassword === DASHBOARD_DEFAULT_PASSWORD
-    ) {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(
-          DASHBOARD_AUTH_STORAGE_KEY,
-          DASHBOARD_AUTH_VALUE
-        );
-      }
+  const onDashboardLogin = async () => {
+    try {
+      await signInWithEmailAndPassword(auth, loginEmail.trim(), loginPassword);
       setAuthError(null);
       setLoginPassword("");
-      setIsAuthenticated(true);
-      return;
-    }
+    } catch (loginError) {
+      const errorCode =
+        typeof loginError === "object" &&
+        loginError !== null &&
+        "code" in loginError &&
+        typeof (loginError as { code?: unknown }).code === "string"
+          ? (loginError as { code: string }).code
+          : "";
 
-    setAuthError("Invalid dashboard credentials.");
+      if (
+        errorCode === "auth/invalid-credential" ||
+        errorCode === "auth/user-not-found" ||
+        errorCode === "auth/wrong-password" ||
+        errorCode === "auth/invalid-email"
+      ) {
+        setAuthError("Invalid email or password.");
+        return;
+      }
+
+      setAuthError("Unable to login with Firebase Auth.");
+    }
   };
 
-  const onDashboardLogout = () => {
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(DASHBOARD_AUTH_STORAGE_KEY);
+  const onDashboardLogout = async () => {
+    try {
+      await signOut(auth);
+      setAuthError(null);
+      setLoginPassword("");
+      setLoginEmail("");
+    } catch {
+      setAuthError("Unable to logout right now.");
     }
-
-    setIsAuthenticated(false);
-    setLoginPassword("");
-    setAuthError(null);
   };
+
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-[#0b141a] px-4 py-8 text-[#e9edef] sm:px-6">
+        <div className="mx-auto flex max-w-[460px] items-center justify-center rounded-2xl border border-[#2a3942] bg-[#111b21] p-6 text-sm text-[#9fb0b8]">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin text-[#25d366]" />
+          Checking Firebase Auth session...
+        </div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
@@ -567,15 +583,15 @@ export default function Dashboard() {
 
             <label className="block">
               <span className="mb-1 block text-xs font-semibold text-[#9fb0b8]">
-                Username
+                Email
               </span>
               <input
-                type="text"
-                value={loginUsername}
-                onChange={(event) => setLoginUsername(event.target.value)}
+                type="email"
+                value={loginEmail}
+                onChange={(event) => setLoginEmail(event.target.value)}
                 className="h-10 w-full rounded-md border border-[#2a3942] bg-[#0b141a] px-3 text-sm text-[#e9edef] outline-none focus:border-[#25d366]"
-                placeholder="Enter username"
-                autoComplete="username"
+                placeholder="admin@example.com"
+                autoComplete="email"
               />
             </label>
 
@@ -607,8 +623,7 @@ export default function Dashboard() {
             </button>
 
             <p className="mt-3 text-[11px] text-[#8696a0]">
-              Configure credentials with VITE_DASHBOARD_USERNAME and
-              VITE_DASHBOARD_PASSWORD.
+              Use a Firebase Authentication user (Email/Password provider).
             </p>
           </form>
         </div>
