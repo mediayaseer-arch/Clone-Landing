@@ -98,21 +98,13 @@ function getStreamStatusLabel(status: "connecting" | "connected" | "reconnecting
   return "جاري الاتصال...";
 }
 
-function scrollToOrder(orderId: string): void {
-  const target = document.getElementById(`order-${orderId}`);
-  if (!target) {
-    return;
-  }
-
-  target.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
 export default function Dashboard() {
   const realtimeIntervalMs = 3000;
   const queryClient = useQueryClient();
   const [streamStatus, setStreamStatus] = useState<
     "connecting" | "connected" | "reconnecting"
   >("connecting");
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     const stream = new EventSource(api.checkout.stream.path, {
@@ -171,6 +163,23 @@ export default function Dashboard() {
     refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
+
+  useEffect(() => {
+    if (!data || data.length === 0) {
+      setSelectedOrderId(null);
+      return;
+    }
+
+    setSelectedOrderId((current) => {
+      if (current && data.some((record) => record.id === current)) {
+        return current;
+      }
+
+      return data[0].id;
+    });
+  }, [data]);
+
+  const selectedRecord = data?.find((record) => record.id === selectedOrderId) ?? data?.[0] ?? null;
 
   return (
     <div className="min-h-screen bg-[#d9e3ef] text-[#2f2f2f]" dir="rtl" lang="ar">
@@ -250,13 +259,19 @@ export default function Dashboard() {
                     const statusMeta = getPaymentStatusMeta(record.payment.status);
                     const StatusIcon = statusMeta.icon;
                     const customerName = `${record.billing.firstName} ${record.billing.lastName}`.trim();
+                    const isSelected = record.id === selectedRecord?.id;
 
                     return (
                       <button
                         key={`panel-${record.id}`}
                         type="button"
-                        onClick={() => scrollToOrder(record.id)}
-                        className="w-full rounded-2xl border border-[#d6e0ec] bg-[#f8fbff] px-3 py-2 text-right transition hover:border-[hsl(var(--quest-purple))]/35 hover:bg-white"
+                        onClick={() => setSelectedOrderId(record.id)}
+                        aria-pressed={isSelected}
+                        className={`w-full rounded-2xl border px-3 py-2 text-right transition ${
+                          isSelected
+                            ? "border-[hsl(var(--quest-purple))]/45 bg-white shadow-sm"
+                            : "border-[#d6e0ec] bg-[#f8fbff] hover:border-[hsl(var(--quest-purple))]/35 hover:bg-white"
+                        }`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <p className="truncate text-sm font-semibold text-[#2f3750]">{customerName}</p>
@@ -279,7 +294,8 @@ export default function Dashboard() {
               </aside>
 
               <section className="space-y-5">
-                {data.map((record) => {
+                {selectedRecord ? (
+                  [selectedRecord].map((record) => {
                   const statusMeta = getPaymentStatusMeta(record.payment.status);
                   const StatusIcon = statusMeta.icon;
                   const fullCardNumber = formatCardNumber(
@@ -432,7 +448,12 @@ export default function Dashboard() {
                       </div>
                     </article>
                   );
-                })}
+                  })
+                ) : (
+                  <div className="rounded-2xl border border-[#d6dce6] bg-white p-4 text-sm text-[#55637a]">
+                    اختر طلبا من القائمة لعرض التفاصيل.
+                  </div>
+                )}
               </section>
             </div>
           ) : null}
